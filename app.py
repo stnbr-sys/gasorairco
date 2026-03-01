@@ -31,12 +31,25 @@ CITIES: dict[str, tuple[float, float]] = {
     'Zwolle':           (52.5168, 6.0830),
 }
 
-AC_SYSTEMS: dict[str, float] = {
-    'Premium Inverter (Daikin, Mitsubishi e.d.)': 0.50,
-    'Standaard Inverter split-unit':               0.45,
-    'Multi-split systeem':                         0.42,
-    'Niet-inverter split-unit':                    0.35,
-    'Mobiele airco':                               0.25,
+# COP lookup tables per system type: list of (outdoor_temp_°C, COP) pairs.
+# Based on EN 14511 manufacturer data for air-to-air heating mode.
+# Sorted by temperature ascending.
+AC_SYSTEMS: dict[str, list[tuple[float, float]]] = {
+    'Premium Inverter (Daikin, Mitsubishi e.d.)': [
+        (-15, 1.7), (-10, 2.3), (-7, 2.7), (2, 3.9), (7, 5.2), (10, 5.8), (15, 6.5),
+    ],
+    'Standaard Inverter split-unit': [
+        (-15, 1.5), (-10, 1.9), (-7, 2.3), (2, 3.3), (7, 4.3), (10, 4.8), (15, 5.5),
+    ],
+    'Multi-split systeem': [
+        (-15, 1.4), (-10, 1.8), (-7, 2.1), (2, 3.0), (7, 3.8), (10, 4.2), (15, 4.9),
+    ],
+    'Niet-inverter split-unit': [
+        (-10, 1.4), (-7, 1.8), (2, 2.5), (7, 3.0), (10, 3.3), (15, 3.8),
+    ],
+    'Mobiele airco': [
+        (0, 1.2), (5, 1.4), (7, 1.6), (10, 1.8), (15, 2.0),
+    ],
 }
 
 GAS_ENERGY_CONTENT = 9.77   # kWh/m³  (Gronings/L-gas)
@@ -46,14 +59,23 @@ BOILER_EFFICIENCY  = 0.95   # modern HR condensing boiler
 # Core functions
 # ---------------------------------------------------------------------------
 
-def calculate_cop(outdoor_temp_c: float, efficiency_factor: float) -> float | None:
-    """Return practical COP for heating, or None if no heating is needed."""
-    T_hot  = 21.0 + 273.15
-    T_cold = outdoor_temp_c + 273.15
-    if T_cold >= T_hot:
+def lookup_cop(outdoor_temp_c: float, curve: list[tuple[float, float]]) -> float | None:
+    """Interpolate COP from a manufacturer lookup table. Returns None if no heating needed."""
+    if outdoor_temp_c >= 21.0:
         return None
-    cop_carnot = T_hot / (T_hot - T_cold)
-    return max(1.0, efficiency_factor * cop_carnot)
+    # Clamp to table bounds rather than extrapolating wildly
+    if outdoor_temp_c <= curve[0][0]:
+        return curve[0][1]
+    if outdoor_temp_c >= curve[-1][0]:
+        return curve[-1][1]
+    # Linear interpolation between surrounding data points
+    for i in range(len(curve) - 1):
+        t0, cop0 = curve[i]
+        t1, cop1 = curve[i + 1]
+        if t0 <= outdoor_temp_c <= t1:
+            f = (outdoor_temp_c - t0) / (t1 - t0)
+            return cop0 + f * (cop1 - cop0)
+    return curve[-1][1]
 
 
 
@@ -90,8 +112,8 @@ def calculate():
     except (TypeError, ValueError):
         return jsonify({'error': 'Invalid price or temperature'}), 400
 
-    factor   = AC_SYSTEMS[ac_system]
-    cop      = calculate_cop(temperature, factor)
+    curve = AC_SYSTEMS[ac_system]
+    cop   = lookup_cop(temperature, curve)
     gas_cost = gas_price / (GAS_ENERGY_CONTENT * BOILER_EFFICIENCY)
 
     if cop is None:
