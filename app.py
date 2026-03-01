@@ -83,7 +83,8 @@ def get_temperatures():
     def _fetch(city: str, lat: float, lon: float) -> tuple[str, float | None]:
         try:
             return city, fetch_temperature(lat, lon)
-        except Exception:
+        except Exception as e:
+            print(f"[temp fetch] {city}: {e}", flush=True)
             return city, None
 
     results: dict[str, float | None] = {}
