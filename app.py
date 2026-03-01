@@ -1,7 +1,6 @@
 import os
 
 from flask import Flask, jsonify, render_template, request
-import requests
 
 app = Flask(__name__)
 
@@ -57,25 +56,6 @@ def calculate_cop(outdoor_temp_c: float, efficiency_factor: float) -> float | No
     return max(1.0, efficiency_factor * cop_carnot)
 
 
-def fetch_all_temperatures() -> dict[str, float | None]:
-    """Fetch all city temperatures in a single batch request to Open-Meteo."""
-    cities = list(CITIES.items())
-    lats = ",".join(str(lat) for _, (lat, _) in cities)
-    lons = ",".join(str(lon) for _, (_, lon) in cities)
-    url = (
-        f"https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lats}&longitude={lons}&current_weather=true"
-    )
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    # Single location returns a dict; multiple locations returns a list
-    if isinstance(data, dict):
-        data = [data]
-    return {
-        city: entry["current_weather"]["temperature"]
-        for (city, _), entry in zip(cities, data)
-    }
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -85,16 +65,6 @@ def fetch_all_temperatures() -> dict[str, float | None]:
 def index():
     return render_template('index.html', cities=CITIES, ac_systems=AC_SYSTEMS)
 
-
-@app.route('/api/temperatures')
-def get_temperatures():
-    """Fetch all city temperatures in a single batch request and return as JSON."""
-    try:
-        results = fetch_all_temperatures()
-    except Exception as e:
-        print(f"[temp fetch] batch failed: {e}", flush=True)
-        results = {city: None for city in CITIES}
-    return jsonify(results)
 
 
 @app.route('/api/calculate', methods=['POST'])
