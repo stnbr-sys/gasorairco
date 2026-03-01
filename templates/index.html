@@ -112,9 +112,60 @@
             z-index: 1000;
             display: none;
         }
+
+        /* ── Mobile toggle button ─────────────────────────────────────── */
+        #sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1100;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 7px 12px;
+            font-size: 20px;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
+
+        /* ── Mobile layout ────────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            #sidebar-toggle { display: block; }
+
+            #sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100%;
+                z-index: 1050;
+                transform: translateX(-100%);
+                transition: transform 0.25s ease;
+                box-shadow: 3px 0 12px rgba(0,0,0,0.3);
+                width: min(290px, 85vw);
+            }
+
+            #sidebar.open { transform: translateX(0); }
+
+            #map { width: 100%; }
+
+            #sidebar-backdrop {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.35);
+                z-index: 1040;
+            }
+
+            #sidebar-backdrop.open { display: block; }
+        }
     </style>
 </head>
 <body>
+
+<button id="sidebar-toggle">☰</button>
+<div id="sidebar-backdrop"></div>
 
 <div id="sidebar">
     <h1>GasOrAirco</h1>
@@ -465,6 +516,26 @@
             if (check.checked) fetchPrice();
         });
     });
+
+    // ── Mobile sidebar toggle ──────────────────────────────────────────────
+    const sidebarEl  = document.getElementById('sidebar');
+    const backdrop   = document.getElementById('sidebar-backdrop');
+    const toggleBtn  = document.getElementById('sidebar-toggle');
+
+    function closeSidebar() {
+        sidebarEl.classList.remove('open');
+        backdrop.classList.remove('open');
+    }
+
+    toggleBtn.addEventListener('click', () => {
+        const isOpen = sidebarEl.classList.toggle('open');
+        backdrop.classList.toggle('open', isOpen);
+    });
+
+    backdrop.addEventListener('click', closeSidebar);
+
+    // Close sidebar when a city marker is tapped on mobile
+    map.on('click', () => { if (window.innerWidth <= 768) closeSidebar(); });
 
     // ── Boot ───────────────────────────────────────────────────────────────
     selectCity('Amsterdam');
