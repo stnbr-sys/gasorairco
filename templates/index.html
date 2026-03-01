@@ -190,15 +190,68 @@
         return `rgb(${r},${g},${b})`;
     }
 
+    // ── Client-side COP lookup (mirrors server-side lookup_cop) ───────────
+    function lookupCop(temp, curve) {
+        if (temp >= 21) return null;
+        if (temp <= curve[0][0]) return curve[0][1];
+        if (temp >= curve[curve.length - 1][0]) return curve[curve.length - 1][1];
+        for (let i = 0; i < curve.length - 1; i++) {
+            const [t0, c0] = curve[i], [t1, c1] = curve[i + 1];
+            if (temp >= t0 && temp <= t1)
+                return c0 + (temp - t0) / (t1 - t0) * (c1 - c0);
+        }
+        return curve[curve.length - 1][1];
+    }
+
+    function cityRecommendation(city) {
+        const temp = temperatures[city];
+        if (temp == null) return null;
+        const gasPrice  = parseFloat(document.getElementById('gas-price').value);
+        const elecPrice = parseFloat(document.getElementById('elec-price').value);
+        if (isNaN(gasPrice) || isNaN(elecPrice)) return null;
+        const gasCost = gasPrice / (9.77 * 0.95);
+        const cop = lookupCop(temp, AC_SYSTEMS[acSelect.value]);
+        if (cop === null) return 'none';
+        return (elecPrice / cop) < gasCost ? 'airco' : 'gas';
+    }
+
+    // ── DivIcon factory ────────────────────────────────────────────────────
+    function makeDivIcon(fillColor, emoji, isSelected) {
+        const size   = isSelected ? 36 : 28;
+        const border = isSelected ? '3px solid #000' : '1.5px solid #444';
+        const fs     = isSelected ? 19 : 15;
+        return L.divIcon({
+            html: `<div style="width:${size}px;height:${size}px;background:${fillColor};` +
+                  `border:${border};border-radius:50%;display:flex;align-items:center;` +
+                  `justify-content:center;font-size:${fs}px;` +
+                  `box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:pointer;">${emoji}</div>`,
+            className: '',
+            iconSize:   [size, size],
+            iconAnchor: [size / 2, size / 2],
+        });
+    }
+
+    // ── Update all marker icons ────────────────────────────────────────────
+    function updateAllMarkers() {
+        const validTemps = Object.values(temperatures).filter(t => t != null);
+        const tMin = validTemps.length ? Math.min(...validTemps) - 1 : 0;
+        const tMax = validTemps.length ? Math.max(...validTemps) + 1 : 20;
+
+        Object.keys(CITIES).forEach(city => {
+            const temp  = temperatures[city];
+            const color = temp != null ? tempToColor(temp, tMin, tMax) : '#bbb';
+            const rec   = cityRecommendation(city);
+            const emoji = rec === 'gas' ? '🔥' : rec === 'airco' ? '⚡' : rec === 'none' ? '☀️' : '';
+            markers[city].setIcon(makeDivIcon(color, emoji, city === selectedCity));
+            if (temp != null)
+                markers[city].bindTooltip(`${city}: ${temp.toFixed(1)}°C`, { permanent: false, direction: 'top' });
+        });
+    }
+
     // ── Create city markers ────────────────────────────────────────────────
     Object.entries(CITIES).forEach(([city, [lat, lon]]) => {
-        const marker = L.circleMarker([lat, lon], {
-            radius: 9,
-            fillColor: '#aaa',
-            color: '#333',
-            weight: 1,
-            opacity: 1,
-            fillOpacity: 0.85,
+        const marker = L.marker([lat, lon], {
+            icon: makeDivIcon('#bbb', '', false),
         }).addTo(map);
 
         marker.bindTooltip(city, { permanent: false, direction: 'top' });
@@ -210,14 +263,7 @@
     function selectCity(city) {
         selectedCity = city;
         document.getElementById('city-name').textContent = `Stad: ${city}`;
-
-        Object.entries(markers).forEach(([c, m]) => {
-            m.setStyle({
-                weight:  c === city ? 2.5 : 1,
-                radius:  c === city ? 12  : 9,
-                color:   c === city ? '#000' : '#333',
-            });
-        });
+        updateAllMarkers();
 
         const temp = temperatures[city];
         updateTempDisplay(temp);
@@ -317,24 +363,8 @@
             overlay.style.display = 'none';
         }
 
-        // Color markers by temperature
-        const validTemps = Object.values(temperatures).filter(t => t != null);
-        if (validTemps.length > 0) {
-            const tMin = Math.min(...validTemps) - 1;
-            const tMax = Math.max(...validTemps) + 1;
+        updateAllMarkers();
 
-            Object.entries(temperatures).forEach(([city, temp]) => {
-                if (!markers[city]) return;
-                if (temp != null) {
-                    markers[city].setStyle({ fillColor: tempToColor(temp, tMin, tMax) });
-                    markers[city].bindTooltip(`${city}: ${temp.toFixed(1)}°C`, {
-                        permanent: false, direction: 'top',
-                    });
-                }
-            });
-        }
-
-        // Refresh selected city display
         const temp = temperatures[selectedCity];
         updateTempDisplay(temp);
         if (temp != null) runCalculate(selectedCity, temp);
@@ -342,6 +372,7 @@
 
     // ── Input change listeners ─────────────────────────────────────────────
     function onInputChange() {
+        updateAllMarkers();
         const temp = temperatures[selectedCity];
         if (temp != null) runCalculate(selectedCity, temp);
     }
