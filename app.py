@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
+import requests
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
@@ -139,6 +141,122 @@ def calculate():
         'airco_cost_kwh': round(airco_cost, 4),
         'savings': round(savings, 4),
     })
+
+
+# Dutch energy taxes 2025 (excl. BTW) — source: Belastingdienst
+# Schijf 1: electricity 0–10,000 kWh/yr, gas 0–170,000 m³/yr
+ELECTRICITY_TAX_KWH = 0.12599  # energiebelasting €/kWh
+GAS_TAX_M3          = 0.49459  # energiebelasting €/m³
+BTW                 = 1.21     # 21% VAT
+
+
+def _energyzero_current_price(usage_type: int) -> dict:
+    """Fetch raw spot price from EnergyZero and compute all-in consumer price.
+    usage_type: 1 = electricity (€/kWh), 3 = gas (€/m³)."""
+    now = datetime.now(timezone.utc)
+    day_start = now.strftime('%Y-%m-%dT00:00:00.000Z')
+    day_end   = now.strftime('%Y-%m-%dT23:59:59.999Z')
+    url = (
+        'https://api.energyzero.nl/v1/energyprices'
+        f'?fromDate={day_start}&tillDate={day_end}'
+        f'&interval=4&usageType={usage_type}&inclBtw=false'
+    )
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    prices = resp.json().get('Prices', [])
+    if not prices:
+        raise ValueError('Geen prijzen beschikbaar')
+
+    current_entry = prices[-1]
+    for entry in prices:
+        try:
+            dt = datetime.fromisoformat(entry['readingDate']).astimezone(timezone.utc)
+            if dt.hour == now.hour:
+                current_entry = entry
+                break
+        except (ValueError, KeyError):
+            pass
+
+    spot = current_entry['price']
+    tax  = ELECTRICITY_TAX_KWH if usage_type == 1 else GAS_TAX_M3
+    all_in = (spot + tax) * BTW
+
+    return {
+        'price':  round(all_in, 4),
+        'spot':   round(spot, 4),
+        'tax':    round(tax, 4),
+        'source': 'EnergyZero',
+        'time':   now.strftime('%H:%M UTC'),
+    }
+
+
+def _easyenergy_current_price(usage_type: int) -> dict:
+    """Fetch spot price from Easyenergy and compute all-in consumer price.
+    usage_type: 1 = electricity, 3 = gas."""
+    now = datetime.now(timezone.utc)
+    # Easyenergy accepts UTC timestamps in ISO format without timezone suffix
+    day_start = now.strftime('%Y-%m-%dT00:00:00')
+    day_end   = now.strftime('%Y-%m-%dT23:59:59')
+    if usage_type == 1:
+        url = (f'https://mijn.easyenergy.com/nl/api/tariff/getapxtariffs'
+               f'?startTimestamp={day_start}&endTimestamp={day_end}')
+    else:
+        url = (f'https://mijn.easyenergy.com/nl/api/tariff/getlebatariffs'
+               f'?startTimestamp={day_start}&endTimestamp={day_end}')
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    prices = resp.json()
+    if not prices:
+        raise ValueError('Geen prijzen beschikbaar')
+
+    current_entry = prices[-1]
+    for entry in prices:
+        try:
+            ts = entry.get('Timestamp', '')
+            dt = datetime.fromisoformat(ts).replace(tzinfo=timezone.utc)
+            if dt.hour == now.hour:
+                current_entry = entry
+                break
+        except (ValueError, KeyError):
+            pass
+
+    spot = current_entry.get('TariffUsage', 0.0)
+    tax  = ELECTRICITY_TAX_KWH if usage_type == 1 else GAS_TAX_M3
+    all_in = (spot + tax) * BTW
+
+    return {
+        'price':  round(all_in, 4),
+        'spot':   round(spot, 4),
+        'tax':    round(tax, 4),
+        'source': 'Easyenergy',
+        'time':   now.strftime('%H:%M UTC'),
+    }
+
+
+_PRICE_FETCHERS = {
+    'energyzero': _energyzero_current_price,
+    'easyenergy': _easyenergy_current_price,
+}
+
+
+@app.route('/api/electricity-price')
+def electricity_price():
+    source = request.args.get('source', 'energyzero')
+    fetcher = _PRICE_FETCHERS.get(source, _energyzero_current_price)
+    try:
+        return jsonify(fetcher(usage_type=1))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+
+@app.route('/api/gas-price')
+def gas_price():
+    source = request.args.get('source', 'energyzero')
+    fetcher = _PRICE_FETCHERS.get(source, _energyzero_current_price)
+    try:
+        return jsonify(fetcher(usage_type=3))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
 
 
 # ---------------------------------------------------------------------------

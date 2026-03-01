@@ -87,6 +87,19 @@
 
         #savings { font-size: 13px; }
 
+        .dynamic-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+
+        #dynamic-info {
+            font-size: 11px;
+            color: #555;
+            font-style: italic;
+        }
+
         #loading-overlay {
             position: absolute;
             top: 8px;
@@ -118,14 +131,29 @@
     <div id="cop-display">COP: —</div>
 
     <div class="field-label">Energieprijzen</div>
+    <div class="field-label" style="margin-top:2px;">Prijsbron dynamisch tarief</div>
+    <select id="price-source">
+        <option value="energyzero">EnergyZero</option>
+        <option value="easyenergy">Easyenergy</option>
+    </select>
     <div class="price-row">
         <label>Gasprijs (€/m³):</label>
         <input type="number" id="gas-price" value="1.25" step="0.01" min="0">
     </div>
+    <div class="dynamic-row">
+        <input type="checkbox" id="dynamic-gas-check">
+        <label for="dynamic-gas-check">Actuele dynamische prijs</label>
+    </div>
+    <div id="dynamic-gas-info"></div>
     <div class="price-row">
         <label>Stroomprijs (€/kWh):</label>
         <input type="number" id="elec-price" value="0.32" step="0.01" min="0">
     </div>
+    <div class="dynamic-row">
+        <input type="checkbox" id="dynamic-check">
+        <label for="dynamic-check">Actuele dynamische prijs</label>
+    </div>
+    <div id="dynamic-info"></div>
 
     <hr>
 
@@ -157,6 +185,7 @@
         opt.textContent = name;
         acSelect.appendChild(opt);
     });
+    acSelect.value = 'Premium Inverter (Daikin, Mitsubishi e.d.)';
 
     // ── Leaflet map ────────────────────────────────────────────────────────
     const map = L.map('map').setView([52.25, 5.30], 7);
@@ -380,6 +409,62 @@
     acSelect.addEventListener('change', onInputChange);
     document.getElementById('gas-price').addEventListener('input', onInputChange);
     document.getElementById('elec-price').addEventListener('input', onInputChange);
+
+    // ── Dynamic price helper ───────────────────────────────────────────────
+    const priceSource = document.getElementById('price-source');
+    const dynamicPairs = [];
+
+    function setupDynamicPrice({ checkId, infoId, inputId, baseUrl, unit }) {
+        const check = document.getElementById(checkId);
+        const info  = document.getElementById(infoId);
+        const input = document.getElementById(inputId);
+
+        async function fetchPrice() {
+            const source = priceSource.value;
+            input.disabled = true;
+            info.textContent = 'Laden…';
+            try {
+                const resp = await fetch(`${baseUrl}?source=${source}`);
+                const data = await resp.json();
+                if (data.error) {
+                    info.textContent = `Fout: ${data.error}`;
+                    check.checked = false;
+                    input.disabled = false;
+                    return;
+                }
+                input.value = data.price.toFixed(4);
+                info.textContent = `€${data.price.toFixed(4)}/${unit} all-in`
+                    + ` (spot €${data.spot.toFixed(4)} + EB €${data.tax.toFixed(4)} + BTW 21%)`
+                    + ` · ${data.source} · ${data.time}`;
+                onInputChange();
+            } catch {
+                info.textContent = 'Ophalen mislukt';
+                check.checked = false;
+                input.disabled = false;
+            }
+        }
+
+        check.addEventListener('change', async () => {
+            if (!check.checked) {
+                input.disabled = false;
+                info.textContent = '';
+                return;
+            }
+            await fetchPrice();
+        });
+
+        dynamicPairs.push({ check, fetchPrice });
+    }
+
+    setupDynamicPrice({ checkId: 'dynamic-check',     infoId: 'dynamic-info',     inputId: 'elec-price', baseUrl: '/api/electricity-price', unit: 'kWh' });
+    setupDynamicPrice({ checkId: 'dynamic-gas-check', infoId: 'dynamic-gas-info', inputId: 'gas-price',  baseUrl: '/api/gas-price',         unit: 'm³'  });
+
+    // Re-fetch when source changes for any active checkbox
+    priceSource.addEventListener('change', () => {
+        dynamicPairs.forEach(({ check, fetchPrice }) => {
+            if (check.checked) fetchPrice();
+        });
+    });
 
     // ── Boot ───────────────────────────────────────────────────────────────
     selectCity('Amsterdam');
