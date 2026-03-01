@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasOrAirco — Verwarmingskosten Adviseur</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            display: flex;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        #sidebar {
+            width: 290px;
+            min-width: 290px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            border-right: 1px solid #ddd;
+        }
+
+        #map { flex: 1; }
+
+        h1 { font-size: 20px; font-weight: bold; }
+
+        #city-name { font-size: 15px; font-weight: bold; }
+
+        .hint { font-size: 11px; color: #888; font-style: italic; }
+
+        .field-label {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 3px;
+        }
+
+        select, input[type="number"] {
+            width: 100%;
+            padding: 5px 7px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+
+        .price-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .price-row label {
+            white-space: nowrap;
+            font-size: 13px;
+            flex: 1;
+        }
+
+        .price-row input {
+            width: 75px;
+            flex-shrink: 0;
+        }
+
+        hr { border: none; border-top: 1px solid #ccc; }
+
+        #cop-display { color: #555; font-size: 13px; }
+        #gas-cost    { font-size: 13px; }
+        #airco-cost  { font-size: 13px; }
+
+        #recommendation {
+            font-size: 15px;
+            font-weight: bold;
+            padding: 8px 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        #recommendation.airco { color: #0055bb; background: #ddeeff; }
+        #recommendation.gas   { color: #bb2200; background: #ffeedd; }
+        #recommendation.none  { color: #006600; background: #eeffee; }
+        #recommendation.wait  { color: #666;    background: #eee;    }
+
+        #savings { font-size: 13px; }
+
+        #loading-overlay {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h1>GasOrAirco</h1>
+
+    <div id="city-name">Stad: Amsterdam</div>
+    <div class="hint">Klik op een stad op de kaart</div>
+    <div id="temp-display">Buitentemp: laden…</div>
+
+    <div>
+        <div class="field-label">Aircosysteem</div>
+        <select id="ac-select"></select>
+    </div>
+
+    <div id="cop-display">COP: —</div>
+
+    <div class="field-label">Energieprijzen</div>
+    <div class="price-row">
+        <label>Gasprijs (€/m³):</label>
+        <input type="number" id="gas-price" value="1.25" step="0.01" min="0">
+    </div>
+    <div class="price-row">
+        <label>Stroomprijs (€/kWh):</label>
+        <input type="number" id="elec-price" value="0.32" step="0.01" min="0">
+    </div>
+
+    <hr>
+
+    <div id="gas-cost">Gas: —</div>
+    <div id="airco-cost">Airco: —</div>
+    <div id="recommendation" class="wait">Laden…</div>
+    <div id="savings"></div>
+</div>
+
+<div id="map">
+    <div id="loading-overlay">Temperaturen laden…</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const CITIES     = {{ cities | tojson }};
+    const AC_SYSTEMS = {{ ac_systems | tojson }};
+
+    // ── State ──────────────────────────────────────────────────────────────
+    let temperatures  = {};
+    let selectedCity  = 'Amsterdam';
+    const markers     = {};
+
+    // ── Populate AC dropdown ───────────────────────────────────────────────
+    const acSelect = document.getElementById('ac-select');
+    Object.keys(AC_SYSTEMS).forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        acSelect.appendChild(opt);
+    });
+
+    // ── Leaflet map ────────────────────────────────────────────────────────
+    const map = L.map('map').setView([52.25, 5.30], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 18,
+    }).addTo(map);
+
+    // ── Color scale (approximates matplotlib RdYlBu_r) ────────────────────
+    function tempToColor(temp, tMin, tMax) {
+        const stops = [
+            { pos: 0.00, r: 33,  g: 102, b: 172 },
+            { pos: 0.25, r: 116, g: 173, b: 209 },
+            { pos: 0.50, r: 255, g: 255, b: 191 },
+            { pos: 0.75, r: 253, g: 174, b: 97  },
+            { pos: 1.00, r: 213, g: 48,  b: 39  },
+        ];
+        const range = tMax > tMin ? tMax - tMin : 1;
+        const t = Math.max(0, Math.min(1, (temp - tMin) / range));
+
+        let lo = stops[0], hi = stops[stops.length - 1];
+        for (let i = 0; i < stops.length - 1; i++) {
+            if (t >= stops[i].pos && t <= stops[i + 1].pos) {
+                lo = stops[i]; hi = stops[i + 1]; break;
+            }
+        }
+        const f = hi.pos > lo.pos ? (t - lo.pos) / (hi.pos - lo.pos) : 0;
+        const r = Math.round(lo.r + f * (hi.r - lo.r));
+        const g = Math.round(lo.g + f * (hi.g - lo.g));
+        const b = Math.round(lo.b + f * (hi.b - lo.b));
+        return `rgb(${r},${g},${b})`;
+    }
+
+    // ── Create city markers ────────────────────────────────────────────────
+    Object.entries(CITIES).forEach(([city, [lat, lon]]) => {
+        const marker = L.circleMarker([lat, lon], {
+            radius: 9,
+            fillColor: '#aaa',
+            color: '#333',
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.85,
+        }).addTo(map);
+
+        marker.bindTooltip(city, { permanent: false, direction: 'top' });
+        marker.on('click', () => selectCity(city));
+        markers[city] = marker;
+    });
+
+    // ── City selection ─────────────────────────────────────────────────────
+    function selectCity(city) {
+        selectedCity = city;
+        document.getElementById('city-name').textContent = `Stad: ${city}`;
+
+        Object.entries(markers).forEach(([c, m]) => {
+            m.setStyle({
+                weight:  c === city ? 2.5 : 1,
+                radius:  c === city ? 12  : 9,
+                color:   c === city ? '#000' : '#333',
+            });
+        });
+
+        const temp = temperatures[city];
+        updateTempDisplay(temp);
+
+        if (temp != null) {
+            runCalculate(city, temp);
+        } else {
+            document.getElementById('recommendation').textContent = 'Temperatuur onbekend';
+            document.getElementById('recommendation').className = 'wait';
+        }
+    }
+
+    function updateTempDisplay(temp) {
+        document.getElementById('temp-display').textContent =
+            temp != null ? `Buitentemp: ${temp.toFixed(1)}°C` : 'Buitentemp: onbekend';
+    }
+
+    // ── API: calculate ─────────────────────────────────────────────────────
+    async function runCalculate(city, temp) {
+        const acSystem  = acSelect.value;
+        const gasPrice  = parseFloat(document.getElementById('gas-price').value.replace(',', '.'));
+        const elecPrice = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
+
+        if (isNaN(gasPrice) || isNaN(elecPrice) || gasPrice < 0 || elecPrice < 0) {
+            document.getElementById('recommendation').textContent = 'Vul geldige prijzen in';
+            document.getElementById('recommendation').className = 'wait';
+            return;
+        }
+
+        let data;
+        try {
+            const resp = await fetch('/api/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    city,
+                    ac_system:   acSystem,
+                    temperature: temp,
+                    gas_price:   gasPrice,
+                    elec_price:  elecPrice,
+                }),
+            });
+            data = await resp.json();
+        } catch {
+            document.getElementById('recommendation').textContent = 'Verbindingsfout';
+            document.getElementById('recommendation').className = 'wait';
+            return;
+        }
+
+        document.getElementById('cop-display').textContent =
+            data.cop != null ? `COP: ${data.cop.toFixed(2)}` : 'COP: —';
+        document.getElementById('gas-cost').textContent =
+            `Gas: €${data.gas_cost_kwh.toFixed(3)}/kWh warmte`;
+
+        if (data.recommendation === 'none') {
+            document.getElementById('airco-cost').textContent = 'Airco: COP n.v.t.';
+            document.getElementById('recommendation').textContent = '☀️ Geen verwarming nodig';
+            document.getElementById('recommendation').className = 'none';
+            document.getElementById('savings').textContent = '';
+        } else {
+            document.getElementById('airco-cost').textContent =
+                `Airco: €${data.airco_cost_kwh.toFixed(3)}/kWh warmte`;
+            document.getElementById('savings').textContent =
+                `Besparing: €${data.savings.toFixed(3)}/kWh`;
+
+            if (data.recommendation === 'airco') {
+                document.getElementById('recommendation').textContent = '❄️ Gebruik AIRCO';
+                document.getElementById('recommendation').className = 'airco';
+            } else {
+                document.getElementById('recommendation').textContent = '🔥 Gebruik GAS';
+                document.getElementById('recommendation').className = 'gas';
+            }
+        }
+    }
+
+    // ── API: fetch all temperatures ────────────────────────────────────────
+    async function fetchTemperatures() {
+        const overlay = document.getElementById('loading-overlay');
+        overlay.style.display = 'block';
+
+        try {
+            const resp = await fetch('/api/temperatures');
+            temperatures = await resp.json();
+        } catch {
+            overlay.textContent = 'Laden mislukt';
+            return;
+        } finally {
+            overlay.style.display = 'none';
+        }
+
+        // Color markers by temperature
+        const validTemps = Object.values(temperatures).filter(t => t != null);
+        if (validTemps.length > 0) {
+            const tMin = Math.min(...validTemps) - 1;
+            const tMax = Math.max(...validTemps) + 1;
+
+            Object.entries(temperatures).forEach(([city, temp]) => {
+                if (!markers[city]) return;
+                if (temp != null) {
+                    markers[city].setStyle({ fillColor: tempToColor(temp, tMin, tMax) });
+                    markers[city].bindTooltip(`${city}: ${temp.toFixed(1)}°C`, {
+                        permanent: false, direction: 'top',
+                    });
+                }
+            });
+        }
+
+        // Refresh selected city display
+        const temp = temperatures[selectedCity];
+        updateTempDisplay(temp);
+        if (temp != null) runCalculate(selectedCity, temp);
+    }
+
+    // ── Input change listeners ─────────────────────────────────────────────
+    function onInputChange() {
+        const temp = temperatures[selectedCity];
+        if (temp != null) runCalculate(selectedCity, temp);
+    }
+
+    acSelect.addEventListener('change', onInputChange);
+    document.getElementById('gas-price').addEventListener('input', onInputChange);
+    document.getElementById('elec-price').addEventListener('input', onInputChange);
+
+    // ── Boot ───────────────────────────────────────────────────────────────
+    selectCity('Amsterdam');
+    fetchTemperatures();
+</script>
+</body>
+</html>
