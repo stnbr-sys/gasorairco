@@ -1,5 +1,4 @@
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flask import Flask, jsonify, render_template, request
 import requests
@@ -58,15 +57,25 @@ def calculate_cop(outdoor_temp_c: float, efficiency_factor: float) -> float | No
     return max(1.0, efficiency_factor * cop_carnot)
 
 
-def fetch_temperature(lat: float, lon: float) -> float:
-    """Fetch current outdoor temperature from Open-Meteo (no API key needed)."""
+def fetch_all_temperatures() -> dict[str, float | None]:
+    """Fetch all city temperatures in a single batch request to Open-Meteo."""
+    cities = list(CITIES.items())
+    lats = ",".join(str(lat) for _, (lat, _) in cities)
+    lons = ",".join(str(lon) for _, (_, lon) in cities)
     url = (
         f"https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}&current_weather=true"
+        f"?latitude={lats}&longitude={lons}&current_weather=true"
     )
-    resp = requests.get(url, timeout=10)
+    resp = requests.get(url, timeout=30)
     resp.raise_for_status()
-    return resp.json()["current_weather"]["temperature"]
+    data = resp.json()
+    # Single location returns a dict; multiple locations returns a list
+    if isinstance(data, dict):
+        data = [data]
+    return {
+        city: entry["current_weather"]["temperature"]
+        for (city, _), entry in zip(cities, data)
+    }
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -79,24 +88,12 @@ def index():
 
 @app.route('/api/temperatures')
 def get_temperatures():
-    """Fetch all city temperatures in parallel and return as JSON."""
-    def _fetch(city: str, lat: float, lon: float) -> tuple[str, float | None]:
-        try:
-            return city, fetch_temperature(lat, lon)
-        except Exception as e:
-            print(f"[temp fetch] {city}: {e}", flush=True)
-            return city, None
-
-    results: dict[str, float | None] = {}
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {
-            executor.submit(_fetch, city, lat, lon): city
-            for city, (lat, lon) in CITIES.items()
-        }
-        for future in as_completed(futures):
-            city, temp = future.result()
-            results[city] = temp
-
+    """Fetch all city temperatures in a single batch request and return as JSON."""
+    try:
+        results = fetch_all_temperatures()
+    except Exception as e:
+        print(f"[temp fetch] batch failed: {e}", flush=True)
+        results = {city: None for city in CITIES}
     return jsonify(results)
 
 
