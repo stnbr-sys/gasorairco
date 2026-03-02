@@ -15,7 +15,7 @@ app = Flask(__name__)
 CITIES: dict[str, tuple[float, float]] = {
     'Amsterdam':        (52.3676, 4.9041),
     'Rotterdam':        (51.9244, 4.4777),
-    'Den Haag':         (52.0705, 4.3007),
+    'The Hague':        (52.0705, 4.3007),
     'Utrecht':          (52.0907, 5.1214),
     'Eindhoven':        (51.4416, 5.4697),
     'Groningen':        (53.2194, 6.5665),
@@ -60,19 +60,19 @@ CITIES: dict[str, tuple[float, float]] = {
 # Based on EN 14511 manufacturer data for air-to-air heating mode.
 # Sorted by temperature ascending.
 AC_SYSTEMS: dict[str, list[tuple[float, float]]] = {
-    'Premium Inverter (Daikin, Mitsubishi e.d.)': [
+    'Premium Inverter (Daikin, Mitsubishi etc.)': [
         (-15, 1.7), (-10, 2.3), (-7, 2.7), (2, 3.9), (7, 5.2), (10, 5.8), (15, 6.5),
     ],
-    'Standaard Inverter split-unit': [
+    'Standard Inverter Split-Unit': [
         (-15, 1.5), (-10, 1.9), (-7, 2.3), (2, 3.3), (7, 4.3), (10, 4.8), (15, 5.5),
     ],
-    'Multi-split systeem': [
+    'Multi-Split System': [
         (-15, 1.4), (-10, 1.8), (-7, 2.1), (2, 3.0), (7, 3.8), (10, 4.2), (15, 4.9),
     ],
-    'Niet-inverter split-unit': [
+    'Non-Inverter Split-Unit': [
         (-10, 1.4), (-7, 1.8), (2, 2.5), (7, 3.0), (10, 3.3), (15, 3.8),
     ],
-    'Mobiele airco': [
+    'Portable AC': [
         (0, 1.2), (5, 1.4), (7, 1.6), (10, 1.8), (15, 2.0),
     ],
 }
@@ -186,7 +186,7 @@ def _energyzero_current_price(usage_type: int) -> dict:
     resp.raise_for_status()
     prices = resp.json().get('Prices', [])
     if not prices:
-        raise ValueError('Geen prijzen beschikbaar')
+        raise ValueError('No prices available')
 
     current_entry = prices[-1]
     for entry in prices:
@@ -228,7 +228,7 @@ def _easyenergy_current_price(usage_type: int) -> dict:
     resp.raise_for_status()
     prices = resp.json()
     if not prices:
-        raise ValueError('Geen prijzen beschikbaar')
+        raise ValueError('No prices available')
 
     current_entry = prices[-1]
     for entry in prices:

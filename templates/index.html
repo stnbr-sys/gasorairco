@@ -1,133 +1,215 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GasOrAirco — Verwarmingskosten Adviseur</title>
+    <title>GasOrAirco — Heating Cost Advisor</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
+        :root {
+            --bg:          #f8fafc;
+            --sidebar-bg:  #ffffff;
+            --border:      #e2e8f0;
+            --text:        #1e293b;
+            --text-muted:  #64748b;
+            --text-subtle: #94a3b8;
+            --accent:      #3b82f6;
+            --input-bg:    #f8fafc;
+            --radius:      8px;
+            --shadow:      0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+        }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             display: flex;
             height: 100vh;
-            font-family: Arial, sans-serif;
+            font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
             font-size: 14px;
+            background: var(--bg);
+            color: var(--text);
         }
 
+        /* ── Sidebar ──────────────────────────────────────────────────── */
         #sidebar {
-            width: 290px;
-            min-width: 290px;
-            padding: 16px;
+            width: 300px;
+            min-width: 300px;
+            padding: 20px 18px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 14px;
             overflow-y: auto;
-            background: #f5f5f5;
-            border-right: 1px solid #ddd;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            z-index: 10;
         }
 
         #map { flex: 1; }
 
-        h1 { font-size: 20px; font-weight: bold; }
-
-        #city-name { font-size: 15px; font-weight: bold; }
-
-        .hint { font-size: 11px; color: #888; font-style: italic; }
-
-        .field-label {
-            font-size: 12px;
-            color: #555;
-            margin-bottom: 3px;
+        /* ── Typography ───────────────────────────────────────────────── */
+        .app-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #0f172a;
+            letter-spacing: -0.5px;
         }
 
+        .app-subtitle {
+            font-size: 11px;
+            color: var(--text-subtle);
+            margin-top: -10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-subtle);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: -4px;
+        }
+
+        #city-name { font-size: 15px; font-weight: 600; color: var(--text); }
+
+        .hint { font-size: 11px; color: var(--text-subtle); font-style: italic; }
+
+        #temp-display { font-size: 13px; color: var(--text-muted); }
+        #cop-display  { font-size: 12px; color: var(--text-muted); }
+
+        /* ── Divider ──────────────────────────────────────────────────── */
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2px 0;
+        }
+
+        /* ── Form controls ────────────────────────────────────────────── */
         select, input[type="number"] {
             width: 100%;
-            padding: 5px 7px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
+            padding: 7px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--radius);
             font-size: 13px;
+            font-family: inherit;
+            color: var(--text);
+            background: var(--input-bg);
+            transition: border-color 0.15s, box-shadow 0.15s;
+            appearance: none;
+            -webkit-appearance: none;
         }
 
+        select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            padding-right: 28px;
+        }
+
+        select:focus, input[type="number"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+        }
+
+        select:hover, input[type="number"]:hover {
+            border-color: #93c5fd;
+        }
+
+        /* ── Price row ────────────────────────────────────────────────── */
         .price-row {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
         }
 
         .price-row label {
-            white-space: nowrap;
-            font-size: 13px;
             flex: 1;
+            font-size: 13px;
+            color: var(--text-muted);
+            white-space: nowrap;
         }
 
         .price-row input {
-            width: 75px;
+            width: 78px;
             flex-shrink: 0;
+            text-align: right;
         }
 
-        hr { border: none; border-top: 1px solid #ccc; }
-
-        #cop-display { color: #555; font-size: 13px; }
-        #gas-cost    { font-size: 13px; }
-        #airco-cost  { font-size: 13px; }
-
-        #recommendation {
-            font-size: 15px;
-            font-weight: bold;
-            padding: 8px 10px;
-            border-radius: 4px;
-            text-align: center;
-        }
-
-        #recommendation.airco { color: #0055bb; background: #ddeeff; }
-        #recommendation.gas   { color: #bb2200; background: #ffeedd; }
-        #recommendation.none  { color: #006600; background: #eeffee; }
-        #recommendation.wait  { color: #666;    background: #eee;    }
-
-        #savings { font-size: 13px; }
-
+        /* ── Dynamic price toggle ─────────────────────────────────────── */
         .dynamic-row {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 13px;
+            gap: 7px;
+            font-size: 12px;
+            color: var(--text-muted);
         }
 
-        #dynamic-info {
-            font-size: 11px;
-            color: #555;
+        .dynamic-row input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 14px;
+            height: 14px;
+            cursor: pointer;
+        }
+
+        .dynamic-info {
+            font-size: 10px;
+            color: var(--text-subtle);
             font-style: italic;
+            line-height: 1.4;
         }
 
+        /* ── Result cards ─────────────────────────────────────────────── */
+        .cost-line { font-size: 13px; color: var(--text-muted); }
+
+        #recommendation {
+            font-size: 15px;
+            font-weight: 700;
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            text-align: center;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        #recommendation.airco { color: #1d4ed8; background: #dbeafe; }
+        #recommendation.gas   { color: #b91c1c; background: #fee2e2; }
+        #recommendation.none  { color: #15803d; background: #dcfce7; }
+        #recommendation.wait  { color: var(--text-subtle); background: #f1f5f9; }
+
+        #savings { font-size: 12px; color: var(--text-muted); text-align: center; }
+
+        /* ── Loading overlay ──────────────────────────────────────────── */
         #loading-overlay {
             position: absolute;
-            top: 8px;
-            right: 8px;
-            background: rgba(0,0,0,0.6);
+            top: 10px;
+            right: 10px;
+            background: rgba(15,23,42,0.75);
             color: #fff;
-            padding: 6px 12px;
-            border-radius: 4px;
-            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
             z-index: 1000;
             display: none;
+            backdrop-filter: blur(4px);
         }
 
         /* ── Mobile toggle button ─────────────────────────────────────── */
         #sidebar-toggle {
             display: none;
             position: fixed;
-            top: 10px;
-            left: 10px;
+            top: 12px;
+            left: 12px;
             z-index: 1100;
             background: white;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            padding: 7px 12px;
-            font-size: 20px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 8px 13px;
+            font-size: 18px;
             line-height: 1;
             cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            box-shadow: var(--shadow);
         }
 
         /* ── Mobile layout ────────────────────────────────────────────── */
@@ -142,8 +224,8 @@
                 z-index: 1050;
                 transform: translateX(-100%);
                 transition: transform 0.25s ease;
-                box-shadow: 3px 0 12px rgba(0,0,0,0.3);
-                width: min(290px, 85vw);
+                box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+                width: min(300px, 88vw);
             }
 
             #sidebar.open { transform: translateX(0); }
@@ -154,8 +236,9 @@
                 display: none;
                 position: fixed;
                 inset: 0;
-                background: rgba(0,0,0,0.35);
+                background: rgba(15,23,42,0.35);
                 z-index: 1040;
+                backdrop-filter: blur(2px);
             }
 
             #sidebar-backdrop.open { display: block; }
@@ -168,54 +251,61 @@
 <div id="sidebar-backdrop"></div>
 
 <div id="sidebar">
-    <h1>GasOrAirco</h1>
+    <div class="app-title">GasOrAirco</div>
+    <div class="app-subtitle">Heating Cost Advisor</div>
 
-    <div id="city-name">Stad: Amsterdam</div>
-    <div class="hint">Klik op een stad op de kaart</div>
-    <div id="temp-display">Buitentemp: laden…</div>
+    <hr>
 
-    <div>
-        <div class="field-label">Aircosysteem</div>
-        <select id="ac-select"></select>
-    </div>
+    <div id="city-name">City: Amsterdam</div>
+    <div class="hint">Click a city on the map</div>
+    <div id="temp-display">Outdoor temp: loading…</div>
 
+    <hr>
+
+    <div class="section-label">AC System</div>
+    <select id="ac-select"></select>
     <div id="cop-display">COP: —</div>
 
-    <div class="field-label">Energieprijzen</div>
-    <div class="field-label" style="margin-top:2px;">Prijsbron dynamisch tarief</div>
+    <hr>
+
+    <div class="section-label">Energy Prices</div>
+
+    <div class="section-label" style="margin-top:2px; font-size:9px;">Dynamic price source</div>
     <select id="price-source">
         <option value="energyzero">EnergyZero</option>
         <option value="easyenergy">Easyenergy</option>
     </select>
+
     <div class="price-row">
-        <label>Gasprijs (€/m³):</label>
+        <label>Gas price (€/m³):</label>
         <input type="number" id="gas-price" value="1.25" step="0.01" min="0">
     </div>
     <div class="dynamic-row">
         <input type="checkbox" id="dynamic-gas-check">
-        <label for="dynamic-gas-check">Actuele dynamische prijs</label>
+        <label for="dynamic-gas-check">Live dynamic price</label>
     </div>
-    <div id="dynamic-gas-info"></div>
+    <div id="dynamic-gas-info" class="dynamic-info"></div>
+
     <div class="price-row">
-        <label>Stroomprijs (€/kWh):</label>
+        <label>Electricity price (€/kWh):</label>
         <input type="number" id="elec-price" value="0.32" step="0.01" min="0">
     </div>
     <div class="dynamic-row">
         <input type="checkbox" id="dynamic-check">
-        <label for="dynamic-check">Actuele dynamische prijs</label>
+        <label for="dynamic-check">Live dynamic price</label>
     </div>
-    <div id="dynamic-info"></div>
+    <div id="dynamic-info" class="dynamic-info"></div>
 
     <hr>
 
-    <div id="gas-cost">Gas: —</div>
-    <div id="airco-cost">Airco: —</div>
-    <div id="recommendation" class="wait">Laden…</div>
+    <div id="gas-cost" class="cost-line">Gas: —</div>
+    <div id="airco-cost" class="cost-line">AC: —</div>
+    <div id="recommendation" class="wait">Loading…</div>
     <div id="savings"></div>
 </div>
 
 <div id="map">
-    <div id="loading-overlay">Temperaturen laden…</div>
+    <div id="loading-overlay">Loading temperatures…</div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -236,7 +326,7 @@
         opt.textContent = name;
         acSelect.appendChild(opt);
     });
-    acSelect.value = 'Premium Inverter (Daikin, Mitsubishi e.d.)';
+    acSelect.value = 'Premium Inverter (Daikin, Mitsubishi etc.)';
 
     // ── Leaflet map ────────────────────────────────────────────────────────
     const map = L.map('map').setView([52.25, 5.30], 7);
@@ -298,13 +388,13 @@
     // ── DivIcon factory ────────────────────────────────────────────────────
     function makeDivIcon(fillColor, emoji, isSelected) {
         const size   = isSelected ? 36 : 28;
-        const border = isSelected ? '3px solid #000' : '1.5px solid #444';
+        const border = isSelected ? '3px solid #0f172a' : '1.5px solid #475569';
         const fs     = isSelected ? 19 : 15;
         return L.divIcon({
             html: `<div style="width:${size}px;height:${size}px;background:${fillColor};` +
                   `border:${border};border-radius:50%;display:flex;align-items:center;` +
                   `justify-content:center;font-size:${fs}px;` +
-                  `box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:pointer;">${emoji}</div>`,
+                  `box-shadow:0 2px 6px rgba(0,0,0,0.25);cursor:pointer;">${emoji}</div>`,
             className: '',
             iconSize:   [size, size],
             iconAnchor: [size / 2, size / 2],
@@ -319,7 +409,7 @@
 
         Object.keys(CITIES).forEach(city => {
             const temp  = temperatures[city];
-            const color = temp != null ? tempToColor(temp, tMin, tMax) : '#bbb';
+            const color = temp != null ? tempToColor(temp, tMin, tMax) : '#94a3b8';
             const rec   = cityRecommendation(city);
             const emoji = rec === 'gas' ? '🔥' : rec === 'airco' ? '⚡' : rec === 'none' ? '☀️' : '';
             markers[city].setIcon(makeDivIcon(color, emoji, city === selectedCity));
@@ -331,7 +421,7 @@
     // ── Create city markers ────────────────────────────────────────────────
     Object.entries(CITIES).forEach(([city, [lat, lon]]) => {
         const marker = L.marker([lat, lon], {
-            icon: makeDivIcon('#bbb', '', false),
+            icon: makeDivIcon('#94a3b8', '', false),
         }).addTo(map);
 
         marker.bindTooltip(city, { permanent: false, direction: 'top' });
@@ -342,7 +432,7 @@
     // ── City selection ─────────────────────────────────────────────────────
     function selectCity(city) {
         selectedCity = city;
-        document.getElementById('city-name').textContent = `Stad: ${city}`;
+        document.getElementById('city-name').textContent = `City: ${city}`;
         updateAllMarkers();
 
         const temp = temperatures[city];
@@ -351,14 +441,14 @@
         if (temp != null) {
             runCalculate(city, temp);
         } else {
-            document.getElementById('recommendation').textContent = 'Temperatuur onbekend';
+            document.getElementById('recommendation').textContent = 'Temperature unknown';
             document.getElementById('recommendation').className = 'wait';
         }
     }
 
     function updateTempDisplay(temp) {
         document.getElementById('temp-display').textContent =
-            temp != null ? `Buitentemp: ${temp.toFixed(1)}°C` : 'Buitentemp: onbekend';
+            temp != null ? `Outdoor temp: ${temp.toFixed(1)}°C` : 'Outdoor temp: unknown';
     }
 
     // ── API: calculate ─────────────────────────────────────────────────────
@@ -368,7 +458,7 @@
         const elecPrice = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
 
         if (isNaN(gasPrice) || isNaN(elecPrice) || gasPrice < 0 || elecPrice < 0) {
-            document.getElementById('recommendation').textContent = 'Vul geldige prijzen in';
+            document.getElementById('recommendation').textContent = 'Enter valid prices';
             document.getElementById('recommendation').className = 'wait';
             return;
         }
@@ -388,7 +478,7 @@
             });
             data = await resp.json();
         } catch {
-            document.getElementById('recommendation').textContent = 'Verbindingsfout';
+            document.getElementById('recommendation').textContent = 'Connection error';
             document.getElementById('recommendation').className = 'wait';
             return;
         }
@@ -396,24 +486,24 @@
         document.getElementById('cop-display').textContent =
             data.cop != null ? `COP: ${data.cop.toFixed(2)}` : 'COP: —';
         document.getElementById('gas-cost').textContent =
-            `Gas: €${data.gas_cost_kwh.toFixed(3)}/kWh warmte`;
+            `Gas: €${data.gas_cost_kwh.toFixed(3)}/kWh heat`;
 
         if (data.recommendation === 'none') {
-            document.getElementById('airco-cost').textContent = 'Airco: COP n.v.t.';
-            document.getElementById('recommendation').textContent = '☀️ Geen verwarming nodig';
+            document.getElementById('airco-cost').textContent = 'AC: COP N/A';
+            document.getElementById('recommendation').textContent = '☀️ No heating needed';
             document.getElementById('recommendation').className = 'none';
             document.getElementById('savings').textContent = '';
         } else {
             document.getElementById('airco-cost').textContent =
-                `Airco: €${data.airco_cost_kwh.toFixed(3)}/kWh warmte`;
+                `AC: €${data.airco_cost_kwh.toFixed(3)}/kWh heat`;
             document.getElementById('savings').textContent =
-                `Besparing: €${data.savings.toFixed(3)}/kWh`;
+                `Savings: €${data.savings.toFixed(3)}/kWh`;
 
             if (data.recommendation === 'airco') {
-                document.getElementById('recommendation').textContent = '❄️ Gebruik AIRCO';
+                document.getElementById('recommendation').textContent = '❄️ Use AC';
                 document.getElementById('recommendation').className = 'airco';
             } else {
-                document.getElementById('recommendation').textContent = '🔥 Gebruik GAS';
+                document.getElementById('recommendation').textContent = '🔥 Use GAS';
                 document.getElementById('recommendation').className = 'gas';
             }
         }
@@ -437,7 +527,7 @@
                 temperatures[city] = entries[i]?.current_weather?.temperature ?? null;
             });
         } catch (e) {
-            overlay.textContent = 'Laden mislukt';
+            overlay.textContent = 'Loading failed';
             return;
         } finally {
             overlay.style.display = 'none';
@@ -473,23 +563,23 @@
         async function fetchPrice() {
             const source = priceSource.value;
             input.disabled = true;
-            info.textContent = 'Laden…';
+            info.textContent = 'Loading…';
             try {
                 const resp = await fetch(`${baseUrl}?source=${source}`);
                 const data = await resp.json();
                 if (data.error) {
-                    info.textContent = `Fout: ${data.error}`;
+                    info.textContent = `Error: ${data.error}`;
                     check.checked = false;
                     input.disabled = false;
                     return;
                 }
                 input.value = data.price.toFixed(4);
                 info.textContent = `€${data.price.toFixed(4)}/${unit} all-in`
-                    + ` (spot €${data.spot.toFixed(4)} + EB €${data.tax.toFixed(4)} + BTW 21%)`
+                    + ` (spot €${data.spot.toFixed(4)} + tax €${data.tax.toFixed(4)} + VAT 21%)`
                     + ` · ${data.source} · ${data.time}`;
                 onInputChange();
             } catch {
-                info.textContent = 'Ophalen mislukt';
+                info.textContent = 'Fetch failed';
                 check.checked = false;
                 input.disabled = false;
             }
