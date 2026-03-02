@@ -66,6 +66,24 @@ def calculate_cop(outdoor_temp_c: float, efficiency_factor: float) -> float | No
     return max(1.0, efficiency_factor * cop_carnot)
 
 
+def calculate_break_even(gas_cost_kwh: float, elec_price: float, efficiency_factor: float) -> tuple[str, float | None]:
+    """Return (kind, temp) where kind is 'break_even', 'ac_always', or 'gas_always'.
+    Break-even is the outdoor °C where gas and AC heating costs are equal."""
+    if elec_price <= 0 or gas_cost_kwh <= 0:
+        return ('unknown', None)
+    required_cop = elec_price / gas_cost_kwh
+    # COP is always ≥ 1.0 — if even COP=1 beats gas, AC always wins
+    if required_cop <= 1.0:
+        return ('ac_always', None)
+    # Solve Carnot: efficiency * T_hot / (T_hot - T_cold) = required_cop
+    T_hot = 21.0 + 273.15
+    T_cold_k = T_hot * (1.0 - efficiency_factor / required_cop)
+    T_out = T_cold_k - 273.15
+    if T_out >= 20.0:
+        return ('gas_always', None)
+    return ('break_even', T_out)
+
+
 def fetch_temperature(lat: float, lon: float) -> float:
     """Fetch current outdoor temperature from Open-Meteo (no API key needed)."""
     url = (
@@ -92,6 +110,19 @@ class TempFetchWorker(QThread):
                 temps[city] = None
         self.finished.emit(temps)
 
+
+class LocationFetchWorker(QThread):
+    """Detect approximate location via IP geolocation (no permission needed)."""
+    finished = pyqtSignal(float, float)  # lat, lon
+
+    def run(self) -> None:
+        try:
+            resp = requests.get('https://ipapi.co/json/', timeout=6)
+            data = resp.json()
+            self.finished.emit(float(data['latitude']), float(data['longitude']))
+        except Exception:
+            pass
+
 # ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
@@ -105,6 +136,7 @@ class MainWindow(QMainWindow):
         self.selected_city = "Amsterdam"
         self._build_ui()
         self._start_fetch()
+        self._start_location_fetch()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -202,6 +234,14 @@ class MainWindow(QMainWindow):
         self.savings_label.setObjectName("savingsLabel")
         lv.addWidget(self.savings_label)
 
+        lv.addWidget(self._divider())
+        lv.addWidget(self._section_label("Break-Even Temperature"))
+
+        self.breakeven_label = QLabel("—")
+        self.breakeven_label.setObjectName("breakevenLabel")
+        self.breakeven_label.setWordWrap(True)
+        lv.addWidget(self.breakeven_label)
+
         lv.addStretch()
         root.addWidget(left)
 
@@ -245,6 +285,18 @@ class MainWindow(QMainWindow):
         self.temperatures = temps
         self._update_temp_label(self.selected_city)
         self._recalculate()
+
+    def _start_location_fetch(self) -> None:
+        self.loc_worker = LocationFetchWorker()
+        self.loc_worker.finished.connect(self._on_location_fetched)
+        self.loc_worker.start()
+
+    def _on_location_fetched(self, lat: float, lon: float) -> None:
+        nearest = min(
+            CITIES,
+            key=lambda c: (CITIES[c][0] - lat) ** 2 + (CITIES[c][1] - lon) ** 2,
+        )
+        self._select_city(nearest)
 
     # ------------------------------------------------------------------
     # Map interaction
@@ -311,6 +363,9 @@ class MainWindow(QMainWindow):
         gas_cost_kwh = gas_price / (GAS_ENERGY_CONTENT * BOILER_EFFICIENCY)
         self.gas_cost_label.setText(f"Gas: €{gas_cost_kwh:.3f}/kWh heat")
 
+        factor = AC_SYSTEMS[self.ac_combo.currentText()]
+        self._update_breakeven(gas_cost_kwh, elec_price, factor)
+
         if cop is None:
             self.airco_cost_label.setText("AC: COP N/A")
             self.recommendation_label.setText("No heating needed")
@@ -340,6 +395,21 @@ class MainWindow(QMainWindow):
 
         self._draw_map()
 
+    def _update_breakeven(self, gas_cost_kwh: float, elec_price: float, factor: float) -> None:
+        kind, temp = calculate_break_even(gas_cost_kwh, elec_price, factor)
+        if kind == 'break_even':
+            self.breakeven_label.setText(f"{temp:.1f}°C — AC cheaper above this")
+            self.breakeven_label.setStyleSheet("color: #0369a1; font-weight: bold;")
+        elif kind == 'ac_always':
+            self.breakeven_label.setText("AC always cheaper at these prices")
+            self.breakeven_label.setStyleSheet("color: #1d4ed8;")
+        elif kind == 'gas_always':
+            self.breakeven_label.setText("Gas always cheaper at these prices")
+            self.breakeven_label.setStyleSheet("color: #b91c1c;")
+        else:
+            self.breakeven_label.setText("—")
+            self.breakeven_label.setStyleSheet("color: #94a3b8;")
+
     def _clear_results(self, message: str) -> None:
         self.gas_cost_label.setText("Gas: —")
         self.airco_cost_label.setText("AC: —")
@@ -348,6 +418,8 @@ class MainWindow(QMainWindow):
             "color: #6b7280; background: #f3f4f6; padding: 8px 12px; border-radius: 8px;"
         )
         self.savings_label.setText("")
+        self.breakeven_label.setText("—")
+        self.breakeven_label.setStyleSheet("color: #94a3b8;")
 
     # ------------------------------------------------------------------
     # Temperature map
@@ -505,6 +577,9 @@ APP_STYLE = """
     }
     QLabel#savingsLabel {
         color: #475569;
+        font-size: 12px;
+    }
+    QLabel#breakevenLabel {
         font-size: 12px;
     }
     QFrame#divider {

@@ -180,6 +180,35 @@
 
         #savings { font-size: 12px; color: var(--text-muted); text-align: center; }
 
+        /* ── Break-even card ──────────────────────────────────────────── */
+        .break-even-card {
+            font-size: 12px;
+            padding: 8px 11px;
+            border-radius: var(--radius);
+            border: 1px solid #bae6fd;
+            background: #f0f9ff;
+            color: #0369a1;
+            font-weight: 600;
+        }
+        .break-even-card.ac  { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; font-weight: normal; }
+        .break-even-card.gas { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: normal; }
+        .break-even-card.empty { display: none; }
+
+        /* ── Location button ──────────────────────────────────────────── */
+        #locate-btn {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-size: 15px;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: background 0.15s, border-color 0.15s;
+            line-height: 1.6;
+        }
+        #locate-btn:hover  { background: #f1f5f9; border-color: var(--accent); }
+        #locate-btn:disabled { opacity: 0.5; cursor: default; }
+
         /* ── Loading overlay ──────────────────────────────────────────── */
         #loading-overlay {
             position: absolute;
@@ -256,7 +285,10 @@
 
     <hr>
 
-    <div id="city-name">City: Amsterdam</div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+        <div id="city-name">City: Amsterdam</div>
+        <button id="locate-btn" title="Detect my location">📍</button>
+    </div>
     <div class="hint">Click a city on the map</div>
     <div id="temp-display">Outdoor temp: loading…</div>
 
@@ -302,6 +334,11 @@
     <div id="airco-cost" class="cost-line">AC: —</div>
     <div id="recommendation" class="wait">Loading…</div>
     <div id="savings"></div>
+
+    <hr>
+
+    <div class="section-label">Break-Even Temperature</div>
+    <div id="break-even" class="break-even-card empty"></div>
 </div>
 
 <div id="map">
@@ -540,9 +577,72 @@
         if (temp != null) runCalculate(selectedCity, temp);
     }
 
+    // ── Break-even temperature ─────────────────────────────────────────────
+    function findBreakEven(curve, gasCostKwh, elecPrice) {
+        if (gasCostKwh <= 0 || elecPrice <= 0) return { type: 'unknown' };
+        const required = elecPrice / gasCostKwh;
+        if (required <= curve[0][1]) return { type: 'ac_always' };
+        if (required > curve[curve.length - 1][1]) return { type: 'gas_always' };
+        for (let i = 0; i < curve.length - 1; i++) {
+            const [t0, c0] = curve[i], [t1, c1] = curve[i + 1];
+            if (c0 <= required && required <= c1) {
+                const f = (required - c0) / (c1 - c0);
+                return { type: 'break_even', temp: t0 + f * (t1 - t0) };
+            }
+        }
+        return { type: 'gas_always' };
+    }
+
+    function updateBreakEven() {
+        const gasPrice  = parseFloat(document.getElementById('gas-price').value.replace(',', '.'));
+        const elecPrice = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
+        const el = document.getElementById('break-even');
+        if (isNaN(gasPrice) || isNaN(elecPrice)) { el.className = 'break-even-card empty'; return; }
+        const gasCostKwh = gasPrice / (9.77 * 0.95);
+        const be = findBreakEven(AC_SYSTEMS[acSelect.value], gasCostKwh, elecPrice);
+        if (be.type === 'break_even') {
+            el.textContent = `${be.temp.toFixed(1)}°C — AC cheaper above this temperature`;
+            el.className = 'break-even-card';
+        } else if (be.type === 'ac_always') {
+            el.textContent = 'AC always cheaper at these prices';
+            el.className = 'break-even-card ac';
+        } else if (be.type === 'gas_always') {
+            el.textContent = 'Gas always cheaper at these prices';
+            el.className = 'break-even-card gas';
+        } else {
+            el.className = 'break-even-card empty';
+        }
+    }
+
+    // ── Geolocation ────────────────────────────────────────────────────────
+    function detectLocation() {
+        if (!navigator.geolocation) return;
+        const btn = document.getElementById('locate-btn');
+        btn.textContent = '⏳';
+        btn.disabled = true;
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                const { latitude: lat, longitude: lon } = pos.coords;
+                let nearest = null, minDist = Infinity;
+                Object.entries(CITIES).forEach(([city, [clat, clon]]) => {
+                    const d = (clat - lat) ** 2 + (clon - lon) ** 2;
+                    if (d < minDist) { minDist = d; nearest = city; }
+                });
+                if (nearest) selectCity(nearest);
+                btn.textContent = '📍';
+                btn.disabled = false;
+            },
+            () => { btn.textContent = '📍'; btn.disabled = false; },
+            { timeout: 10000 }
+        );
+    }
+
+    document.getElementById('locate-btn').addEventListener('click', detectLocation);
+
     // ── Input change listeners ─────────────────────────────────────────────
     function onInputChange() {
         updateAllMarkers();
+        updateBreakEven();
         const temp = temperatures[selectedCity];
         if (temp != null) runCalculate(selectedCity, temp);
     }
@@ -629,7 +729,9 @@
 
     // ── Boot ───────────────────────────────────────────────────────────────
     selectCity('Amsterdam');
+    updateBreakEven();
     fetchTemperatures();
+    detectLocation();  // silently auto-select nearest city; browser will prompt for permission
 </script>
 </body>
 </html>

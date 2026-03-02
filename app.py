@@ -103,6 +103,27 @@ def lookup_cop(outdoor_temp_c: float, curve: list[tuple[float, float]]) -> float
     return curve[-1][1]
 
 
+def find_break_even(curve: list[tuple[float, float]], gas_cost_kwh: float, elec_price: float) -> dict:
+    """Outdoor °C where AC and gas heating cost are exactly equal.
+    Returns {'type': 'break_even'|'ac_always'|'gas_always', 'temp': float|None}."""
+    if gas_cost_kwh <= 0 or elec_price <= 0:
+        return {'type': 'unknown', 'temp': None}
+    required_cop = elec_price / gas_cost_kwh
+    # AC cheaper even at the lowest COP in the table
+    if required_cop <= curve[0][1]:
+        return {'type': 'ac_always', 'temp': None}
+    # Gas always wins; AC never reaches the required COP
+    if required_cop > curve[-1][1]:
+        return {'type': 'gas_always', 'temp': None}
+    for i in range(len(curve) - 1):
+        t0, cop0 = curve[i]
+        t1, cop1 = curve[i + 1]
+        if cop0 <= required_cop <= cop1:
+            f = (required_cop - cop0) / (cop1 - cop0)
+            return {'type': 'break_even', 'temp': round(t0 + f * (t1 - t0), 1)}
+    return {'type': 'gas_always', 'temp': None}
+
+
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -137,9 +158,10 @@ def calculate():
     except (TypeError, ValueError):
         return jsonify({'error': 'Invalid price or temperature'}), 400
 
-    curve = AC_SYSTEMS[ac_system]
-    cop   = lookup_cop(temperature, curve)
+    curve    = AC_SYSTEMS[ac_system]
+    cop      = lookup_cop(temperature, curve)
     gas_cost = gas_price / (GAS_ENERGY_CONTENT * BOILER_EFFICIENCY)
+    be       = find_break_even(curve, gas_cost, elec_price)
 
     if cop is None:
         return jsonify({
@@ -149,6 +171,7 @@ def calculate():
             'gas_cost_kwh': round(gas_cost, 4),
             'airco_cost_kwh': None,
             'savings': None,
+            'break_even': be,
         })
 
     airco_cost = elec_price / cop
@@ -161,6 +184,7 @@ def calculate():
         'gas_cost_kwh': round(gas_cost, 4),
         'airco_cost_kwh': round(airco_cost, 4),
         'savings': round(savings, 4),
+        'break_even': be,
     })
 
 
