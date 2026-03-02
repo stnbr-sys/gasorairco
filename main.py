@@ -1,3 +1,5 @@
+import json
+import os
 import sys
 import requests
 
@@ -37,13 +39,18 @@ CITIES: dict[str, tuple[float, float]] = {
     'Zwolle':           (52.5168, 6.0830),
 }
 
-AC_SYSTEMS: dict[str, float] = {
-    'Premium Inverter (Daikin, Mitsubishi etc.)': 0.50,
-    'Standard Inverter Split-Unit':               0.45,
-    'Multi-Split System':                         0.42,
-    'Non-Inverter Split-Unit':                    0.35,
-    'Portable AC':                                0.25,
-}
+def _load_ac_systems() -> dict[str, list[tuple[float, float]]]:
+    """Load COP-vs-temperature curves from cop-data.json (EN14511 manufacturer data)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cop-data.json')
+    with open(path) as f:
+        raw = json.load(f)
+    return {
+        s['name']: sorted((float(t), c) for t, c in s['cop_by_temp'].items())
+        for s in raw['systems']
+    }
+
+# Keys: system display name → sorted [(outdoor_°C, COP), …]
+AC_SYSTEMS: dict[str, list[tuple[float, float]]] = _load_ac_systems()
 
 GAS_ENERGY_CONTENT = 9.77   # kWh/m³  (Gronings/L-gas)
 BOILER_EFFICIENCY  = 0.95   # modern HR condensing boiler
@@ -56,32 +63,39 @@ MAP_SOUTH, MAP_NORTH = 50.65, 53.75
 # Core functions
 # ---------------------------------------------------------------------------
 
-def calculate_cop(outdoor_temp_c: float, efficiency_factor: float) -> float | None:
-    """Return practical COP for heating, or None if no heating is needed."""
-    T_hot  = 21.0 + 273.15
-    T_cold = outdoor_temp_c + 273.15
-    if T_cold >= T_hot:
+def lookup_cop(outdoor_temp_c: float, curve: list[tuple[float, float]]) -> float | None:
+    """Interpolate COP from a manufacturer lookup table. Returns None if no heating needed."""
+    if outdoor_temp_c >= 21.0:
         return None
-    cop_carnot = T_hot / (T_hot - T_cold)
-    return max(1.0, efficiency_factor * cop_carnot)
+    if outdoor_temp_c <= curve[0][0]:
+        return curve[0][1]
+    if outdoor_temp_c >= curve[-1][0]:
+        return curve[-1][1]
+    for i in range(len(curve) - 1):
+        t0, cop0 = curve[i]
+        t1, cop1 = curve[i + 1]
+        if t0 <= outdoor_temp_c <= t1:
+            f = (outdoor_temp_c - t0) / (t1 - t0)
+            return cop0 + f * (cop1 - cop0)
+    return curve[-1][1]
 
 
-def calculate_break_even(gas_cost_kwh: float, elec_price: float, efficiency_factor: float) -> tuple[str, float | None]:
-    """Return (kind, temp) where kind is 'break_even', 'ac_always', or 'gas_always'.
-    Break-even is the outdoor °C where gas and AC heating costs are equal."""
+def find_break_even(curve: list[tuple[float, float]], gas_cost_kwh: float, elec_price: float) -> tuple[str, float | None]:
+    """Return ('break_even', temp_°C), ('ac_always', None), or ('gas_always', None)."""
     if elec_price <= 0 or gas_cost_kwh <= 0:
         return ('unknown', None)
     required_cop = elec_price / gas_cost_kwh
-    # COP is always ≥ 1.0 — if even COP=1 beats gas, AC always wins
-    if required_cop <= 1.0:
+    if required_cop <= curve[0][1]:
         return ('ac_always', None)
-    # Solve Carnot: efficiency * T_hot / (T_hot - T_cold) = required_cop
-    T_hot = 21.0 + 273.15
-    T_cold_k = T_hot * (1.0 - efficiency_factor / required_cop)
-    T_out = T_cold_k - 273.15
-    if T_out >= 20.0:
+    if required_cop > curve[-1][1]:
         return ('gas_always', None)
-    return ('break_even', T_out)
+    for i in range(len(curve) - 1):
+        t0, cop0 = curve[i]
+        t1, cop1 = curve[i + 1]
+        if cop0 <= required_cop <= cop1:
+            f = (required_cop - cop0) / (cop1 - cop0)
+            return ('break_even', t0 + f * (t1 - t0))
+    return ('gas_always', None)
 
 
 def fetch_temperature(lat: float, lon: float) -> float:
@@ -336,14 +350,14 @@ class MainWindow(QMainWindow):
         temp = self.temperatures.get(self.selected_city)
         if temp is None:
             return None
-        factor = AC_SYSTEMS[self.ac_combo.currentText()]
-        return calculate_cop(temp, factor)
+        curve = AC_SYSTEMS[self.ac_combo.currentText()]
+        return lookup_cop(temp, curve)
 
-    def _city_recommendation(self, city: str, gas_cost_kwh: float, elec_price: float, factor: float) -> str:
+    def _city_recommendation(self, city: str, gas_cost_kwh: float, elec_price: float, curve: list) -> str:
         temp = self.temperatures.get(city)
         if temp is None:
             return ''
-        cop = calculate_cop(temp, factor)
+        cop = lookup_cop(temp, curve)
         if cop is None:
             return '\u2600\ufe0f'           # ☀️  no heating needed
         return '\u2744\ufe0f' if (elec_price / cop) < gas_cost_kwh else '\U0001f525'  # ❄️ or 🔥
@@ -363,8 +377,8 @@ class MainWindow(QMainWindow):
         gas_cost_kwh = gas_price / (GAS_ENERGY_CONTENT * BOILER_EFFICIENCY)
         self.gas_cost_label.setText(f"Gas: €{gas_cost_kwh:.3f}/kWh heat")
 
-        factor = AC_SYSTEMS[self.ac_combo.currentText()]
-        self._update_breakeven(gas_cost_kwh, elec_price, factor)
+        curve = AC_SYSTEMS[self.ac_combo.currentText()]
+        self._update_breakeven(gas_cost_kwh, elec_price, curve)
 
         if cop is None:
             self.airco_cost_label.setText("AC: COP N/A")
@@ -395,8 +409,8 @@ class MainWindow(QMainWindow):
 
         self._draw_map()
 
-    def _update_breakeven(self, gas_cost_kwh: float, elec_price: float, factor: float) -> None:
-        kind, temp = calculate_break_even(gas_cost_kwh, elec_price, factor)
+    def _update_breakeven(self, gas_cost_kwh: float, elec_price: float, curve: list) -> None:
+        kind, temp = find_break_even(curve, gas_cost_kwh, elec_price)
         if kind == 'break_even':
             self.breakeven_label.setText(f"{temp:.1f}°C — AC cheaper above this")
             self.breakeven_label.setStyleSheet("color: #0369a1; font-weight: bold;")
@@ -465,7 +479,7 @@ class MainWindow(QMainWindow):
         except ValueError:
             gas_cost_kwh, elec_price, prices_valid = 0.0, 0.0, False
 
-        factor = AC_SYSTEMS[self.ac_combo.currentText()]
+        curve = AC_SYSTEMS[self.ac_combo.currentText()]
 
         # ── Partition cities into known / unknown temps ────────────────
         known:   list[tuple[float, float, float, str]] = []
@@ -495,7 +509,7 @@ class MainWindow(QMainWindow):
             )
             for lon, lat, temp, name in zip(lons, lats, temps, names):
                 if prices_valid:
-                    icon = self._city_recommendation(name, gas_cost_kwh, elec_price, factor)
+                    icon = self._city_recommendation(name, gas_cost_kwh, elec_price, curve)
                     label = f"{icon} {name}\n{temp:.1f}°C" if icon else f"{name}\n{temp:.1f}°C"
                 else:
                     label = f"{name}\n{temp:.1f}°C"

@@ -1,0 +1,261 @@
+{
+  "meta": {
+    "description": "COP (Coefficient of Performance) als functie van buitentemperatuur voor top 10 airco-systemen in Nederland",
+    "unit": "COP = kW warmte geleverd per kW elektriciteit verbruikt",
+    "standard": "EN14511 / EN14825",
+    "indoor_temp_C": 20,
+    "temperatures_C": [-15, -10, -7, -2, 2, 7, 10, 12, 15],
+    "note": "Waarden gebaseerd op fabrieksspecificaties en EN14825-normgegevens. Werkelijke prestaties variëren per installatie.",
+    "nominal_test_point_C": 7
+  },
+  "reference": {
+    "id": "hr_ketel",
+    "name": "HR Ketel",
+    "type": "gas",
+    "scop": 0.95,
+    "color": "#ff6b6b",
+    "cop_by_temp": {
+      "-15": 1.0,
+      "-10": 1.0,
+      "-7": 1.0,
+      "-2": 1.0,
+      "2": 1.0,
+      "7": 1.0,
+      "10": 1.0,
+      "12": 1.0,
+      "15": 1.0
+    }
+  },
+  "systems": [
+    {
+      "id": "daikin_perfera",
+      "name": "Daikin Perfera (2024)",
+      "brand": "Daikin",
+      "series": "FTXM-R / RXM-R",
+      "energy_label": "A+++",
+      "scop": 5.20,
+      "seer": 9.47,
+      "cop_nominal": 5.0,
+      "color": "#00B4D8",
+      "rank": 1,
+      "cop_by_temp": {
+        "-15": 2.10,
+        "-10": 2.65,
+        "-7": 3.15,
+        "-2": 3.80,
+        "2": 4.20,
+        "7": 5.00,
+        "10": 5.50,
+        "12": 5.80,
+        "15": 6.20
+      }
+    },
+    {
+      "id": "daikin_emura",
+      "name": "Daikin Emura",
+      "brand": "Daikin",
+      "series": "FTXJ",
+      "energy_label": "A+++",
+      "scop": 5.10,
+      "seer": 8.65,
+      "cop_nominal": 4.9,
+      "color": "#0077B6",
+      "rank": 2,
+      "cop_by_temp": {
+        "-15": 2.00,
+        "-10": 2.55,
+        "-7": 3.05,
+        "-2": 3.65,
+        "2": 4.05,
+        "7": 4.90,
+        "10": 5.35,
+        "12": 5.65,
+        "15": 6.00
+      }
+    },
+    {
+      "id": "mitsubishi_ef",
+      "name": "Mitsubishi MSZ-EF",
+      "brand": "Mitsubishi Electric",
+      "series": "MSZ-EF / MUZ-EF",
+      "energy_label": "A+++",
+      "scop": 5.10,
+      "seer": 9.20,
+      "cop_nominal": 4.7,
+      "color": "#E63946",
+      "rank": 3,
+      "cop_by_temp": {
+        "-15": 2.20,
+        "-10": 2.75,
+        "-7": 3.20,
+        "-2": 3.75,
+        "2": 4.00,
+        "7": 4.70,
+        "10": 5.10,
+        "12": 5.40,
+        "15": 5.70
+      }
+    },
+    {
+      "id": "fujitsu_kg",
+      "name": "Fujitsu KG-serie",
+      "brand": "Fujitsu",
+      "series": "ASYG-KG / AOYG-KG",
+      "energy_label": "A+++",
+      "scop": 5.20,
+      "seer": 8.70,
+      "cop_nominal": 4.8,
+      "color": "#F4A261",
+      "rank": 4,
+      "cop_by_temp": {
+        "-15": 2.10,
+        "-10": 2.70,
+        "-7": 3.20,
+        "-2": 3.80,
+        "2": 4.10,
+        "7": 4.80,
+        "10": 5.20,
+        "12": 5.50,
+        "15": 5.90
+      }
+    },
+    {
+      "id": "lg_deluxe",
+      "name": "LG Dualcool Deluxe",
+      "brand": "LG",
+      "series": "HU / PC12SQ",
+      "energy_label": "A+++",
+      "scop": 5.10,
+      "seer": 9.40,
+      "cop_nominal": 4.6,
+      "color": "#A8DADC",
+      "rank": 5,
+      "cop_by_temp": {
+        "-15": 1.90,
+        "-10": 2.45,
+        "-7": 2.95,
+        "-2": 3.60,
+        "2": 3.90,
+        "7": 4.60,
+        "10": 5.00,
+        "12": 5.30,
+        "15": 5.65
+      }
+    },
+    {
+      "id": "samsung_windfree",
+      "name": "Samsung Windfree Elite",
+      "brand": "Samsung",
+      "series": "AR-TXCAAWKNEU",
+      "energy_label": "A+++",
+      "scop": 5.10,
+      "seer": 9.40,
+      "cop_nominal": 4.6,
+      "color": "#2DC653",
+      "rank": 6,
+      "cop_by_temp": {
+        "-15": 1.90,
+        "-10": 2.45,
+        "-7": 2.95,
+        "-2": 3.55,
+        "2": 3.90,
+        "7": 4.60,
+        "10": 5.00,
+        "12": 5.25,
+        "15": 5.60
+      }
+    },
+    {
+      "id": "panasonic_etherea",
+      "name": "Panasonic Etherea",
+      "brand": "Panasonic",
+      "series": "CS-Z / CU-Z",
+      "energy_label": "A+++",
+      "scop": 5.00,
+      "seer": 8.50,
+      "cop_nominal": 4.5,
+      "color": "#9B5DE5",
+      "rank": 7,
+      "cop_by_temp": {
+        "-15": 1.80,
+        "-10": 2.35,
+        "-7": 2.85,
+        "-2": 3.45,
+        "2": 3.80,
+        "7": 4.50,
+        "10": 4.90,
+        "12": 5.20,
+        "15": 5.50
+      }
+    },
+    {
+      "id": "mitsubishi_ap",
+      "name": "Mitsubishi MSZ-AP",
+      "brand": "Mitsubishi Electric",
+      "series": "MSZ-AP / MUZ-AP",
+      "energy_label": "A++",
+      "scop": 4.80,
+      "seer": 8.50,
+      "cop_nominal": 4.5,
+      "color": "#F72585",
+      "rank": 8,
+      "cop_by_temp": {
+        "-15": 1.70,
+        "-10": 2.25,
+        "-7": 2.75,
+        "-2": 3.30,
+        "2": 3.70,
+        "7": 4.50,
+        "10": 4.80,
+        "12": 5.00,
+        "15": 5.30
+      }
+    },
+    {
+      "id": "toshiba_shorai",
+      "name": "Toshiba Shorai Edge",
+      "brand": "Toshiba",
+      "series": "RAS-B / RAS-13",
+      "energy_label": "A+++",
+      "scop": 4.90,
+      "seer": 8.60,
+      "cop_nominal": 4.5,
+      "color": "#FFB703",
+      "rank": 9,
+      "cop_by_temp": {
+        "-15": 1.80,
+        "-10": 2.35,
+        "-7": 2.85,
+        "-2": 3.45,
+        "2": 3.80,
+        "7": 4.50,
+        "10": 4.90,
+        "12": 5.15,
+        "15": 5.45
+      }
+    },
+    {
+      "id": "samsung_crystal",
+      "name": "Samsung Crystal",
+      "brand": "Samsung",
+      "series": "AR-TXHQAAWKNEU",
+      "energy_label": "A+",
+      "scop": 3.90,
+      "seer": 6.20,
+      "cop_nominal": 3.6,
+      "color": "#6C757D",
+      "rank": 10,
+      "cop_by_temp": {
+        "-15": 1.20,
+        "-10": 1.65,
+        "-7": 2.00,
+        "-2": 2.55,
+        "2": 2.90,
+        "7": 3.60,
+        "10": 3.90,
+        "12": 4.10,
+        "15": 4.40
+      }
+    }
+  ]
+}

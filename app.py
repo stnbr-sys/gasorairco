@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timezone
 
@@ -56,26 +57,18 @@ CITIES: dict[str, tuple[float, float]] = {
     'Zoetermeer':       (52.0574, 4.4938),
 }
 
-# COP lookup tables per system type: list of (outdoor_temp_°C, COP) pairs.
-# Based on EN 14511 manufacturer data for air-to-air heating mode.
-# Sorted by temperature ascending.
-AC_SYSTEMS: dict[str, list[tuple[float, float]]] = {
-    'Premium Inverter (Daikin, Mitsubishi etc.)': [
-        (-15, 1.7), (-10, 2.3), (-7, 2.7), (2, 3.9), (7, 5.2), (10, 5.8), (15, 6.5),
-    ],
-    'Standard Inverter Split-Unit': [
-        (-15, 1.5), (-10, 1.9), (-7, 2.3), (2, 3.3), (7, 4.3), (10, 4.8), (15, 5.5),
-    ],
-    'Multi-Split System': [
-        (-15, 1.4), (-10, 1.8), (-7, 2.1), (2, 3.0), (7, 3.8), (10, 4.2), (15, 4.9),
-    ],
-    'Non-Inverter Split-Unit': [
-        (-10, 1.4), (-7, 1.8), (2, 2.5), (7, 3.0), (10, 3.3), (15, 3.8),
-    ],
-    'Portable AC': [
-        (0, 1.2), (5, 1.4), (7, 1.6), (10, 1.8), (15, 2.0),
-    ],
-}
+def _load_ac_systems() -> dict[str, list[tuple[float, float]]]:
+    """Load COP-vs-temperature curves from cop-data.json (EN14511 manufacturer data)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cop-data.json')
+    with open(path) as f:
+        raw = json.load(f)
+    return {
+        s['name']: sorted((float(t), c) for t, c in s['cop_by_temp'].items())
+        for s in raw['systems']
+    }
+
+# Keys: system display name → sorted [(outdoor_°C, COP), …]
+AC_SYSTEMS: dict[str, list[tuple[float, float]]] = _load_ac_systems()
 
 GAS_ENERGY_CONTENT = 9.77   # kWh/m³  (Gronings/L-gas)
 BOILER_EFFICIENCY  = 0.95   # modern HR condensing boiler
@@ -103,25 +96,24 @@ def lookup_cop(outdoor_temp_c: float, curve: list[tuple[float, float]]) -> float
     return curve[-1][1]
 
 
-def find_break_even(curve: list[tuple[float, float]], gas_cost_kwh: float, elec_price: float) -> dict:
-    """Outdoor °C where AC and gas heating cost are exactly equal.
-    Returns {'type': 'break_even'|'ac_always'|'gas_always', 'temp': float|None}."""
+def find_break_even(curve: list[tuple[float, float]], gas_cost_kwh: float, elec_price: float) -> tuple[str, float | None]:
+    """Return ('break_even', temp_°C), ('ac_always', None), or ('gas_always', None)."""
     if gas_cost_kwh <= 0 or elec_price <= 0:
-        return {'type': 'unknown', 'temp': None}
+        return ('unknown', None)
     required_cop = elec_price / gas_cost_kwh
     # AC cheaper even at the lowest COP in the table
     if required_cop <= curve[0][1]:
-        return {'type': 'ac_always', 'temp': None}
+        return ('ac_always', None)
     # Gas always wins; AC never reaches the required COP
     if required_cop > curve[-1][1]:
-        return {'type': 'gas_always', 'temp': None}
+        return ('gas_always', None)
     for i in range(len(curve) - 1):
         t0, cop0 = curve[i]
         t1, cop1 = curve[i + 1]
         if cop0 <= required_cop <= cop1:
             f = (required_cop - cop0) / (cop1 - cop0)
-            return {'type': 'break_even', 'temp': round(t0 + f * (t1 - t0), 1)}
-    return {'type': 'gas_always', 'temp': None}
+            return ('break_even', round(t0 + f * (t1 - t0), 1))
+    return ('gas_always', None)
 
 
 
@@ -161,7 +153,8 @@ def calculate():
     curve    = AC_SYSTEMS[ac_system]
     cop      = lookup_cop(temperature, curve)
     gas_cost = gas_price / (GAS_ENERGY_CONTENT * BOILER_EFFICIENCY)
-    be       = find_break_even(curve, gas_cost, elec_price)
+    be_kind, be_temp = find_break_even(curve, gas_cost, elec_price)
+    be = {'type': be_kind, 'temp': be_temp}
 
     if cop is None:
         return jsonify({
