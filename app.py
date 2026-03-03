@@ -72,6 +72,8 @@ AC_SYSTEMS: dict[str, list[tuple[float, float]]] = _load_ac_systems()
 
 GAS_ENERGY_CONTENT = 9.77   # kWh/m³  (Gronings/L-gas)
 BOILER_EFFICIENCY  = 0.95   # modern HR condensing boiler
+GAS_CO2_G_PER_M3   = 1880  # g CO₂/m³ natural gas (combustion, IPCC AR6)
+NL_GRID_CO2_FALLBACK = 300  # g CO₂/kWh — Dutch grid average estimate (no live token)
 
 # ---------------------------------------------------------------------------
 # Core functions
@@ -295,6 +297,40 @@ def gas_price():
         return jsonify(fetcher(usage_type=3))
     except Exception as e:
         return jsonify({'error': str(e)}), 502
+
+
+@app.route('/api/carbon-intensity')
+def carbon_intensity():
+    """Live Dutch grid CO₂ intensity via ElectricityMaps API.
+    Falls back to a static NL average when ELECTRICITY_MAPS_TOKEN is not set."""
+    gas_co2_kwh = round(GAS_CO2_G_PER_M3 / (GAS_ENERGY_CONTENT * BOILER_EFFICIENCY), 1)
+    token = os.environ.get('ELECTRICITY_MAPS_TOKEN', '').strip()
+    if not token:
+        return jsonify({
+            'carbon_intensity': NL_GRID_CO2_FALLBACK,
+            'gas_co2_kwh_heat': gas_co2_kwh,
+            'live': False,
+        })
+    try:
+        resp = requests.get(
+            'https://api.electricitymap.org/v3/carbon-intensity/latest?zone=NL',
+            headers={'auth-token': token},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return jsonify({
+            'carbon_intensity': data['carbonIntensity'],
+            'gas_co2_kwh_heat': gas_co2_kwh,
+            'live': True,
+            'updated_at': data.get('datetime', ''),
+        })
+    except Exception:
+        return jsonify({
+            'carbon_intensity': NL_GRID_CO2_FALLBACK,
+            'gas_co2_kwh_heat': gas_co2_kwh,
+            'live': False,
+        })
 
 
 # ---------------------------------------------------------------------------

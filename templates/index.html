@@ -196,6 +196,20 @@
         .break-even-card.gas { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: normal; }
         .break-even-card.empty { display: none; }
 
+        /* ── CO₂ card ─────────────────────────────────────────────────── */
+        .co2-card {
+            font-size: 12px;
+            padding: 8px 11px;
+            border-radius: var(--radius);
+            border: 1px solid #d1fae5;
+            background: #f0fdf4;
+            color: #065f46;
+            line-height: 1.5;
+        }
+        .co2-card.worse  { background: #fff7ed; border-color: #fed7aa; color: #92400e; }
+        .co2-card.empty  { display: none; }
+        .co2-card .co2-label { font-size: 10px; color: inherit; opacity: 0.7; display: block; margin-bottom: 2px; }
+
         /* ── Location button ──────────────────────────────────────────── */
         #locate-btn {
             background: none;
@@ -419,6 +433,11 @@
 
     <div class="section-label">Break-Even Temperature</div>
     <div id="break-even" class="break-even-card empty"></div>
+
+    <hr>
+
+    <div class="section-label">CO₂ Emissions</div>
+    <div id="co2-display" class="co2-card empty"></div>
 </div>
 
 <div id="map">
@@ -574,6 +593,8 @@
         const temp = temperatures[city];
         updateTempDisplay(temp);
         updateCopChart();
+        updateCarbonDisplay();
+        savePrefs();
 
         if (temp != null) {
             runCalculate(city, temp);
@@ -675,6 +696,7 @@
         const temp = temperatures[selectedCity];
         updateTempDisplay(temp);
         updateCopChart();
+        updateCarbonDisplay();
         if (temp != null) runCalculate(selectedCity, temp);
     }
 
@@ -820,6 +842,74 @@
         }
     }
 
+    // ── localStorage persistence ───────────────────────────────────────────
+    const LS = 'gasorairco_';
+
+    function savePrefs() {
+        localStorage.setItem(LS + 'city',         selectedCity);
+        localStorage.setItem(LS + 'ac_system',    acSelect.value);
+        localStorage.setItem(LS + 'gas_price',    document.getElementById('gas-price').value);
+        localStorage.setItem(LS + 'elec_price',   document.getElementById('elec-price').value);
+        localStorage.setItem(LS + 'price_source', document.getElementById('price-source').value);
+    }
+
+    function loadPrefs() {
+        const sys    = localStorage.getItem(LS + 'ac_system');
+        const gas    = localStorage.getItem(LS + 'gas_price');
+        const elec   = localStorage.getItem(LS + 'elec_price');
+        const source = localStorage.getItem(LS + 'price_source');
+        const city   = localStorage.getItem(LS + 'city');
+        if (sys    && AC_SYSTEMS[sys]) acSelect.value = sys;
+        if (gas)    document.getElementById('gas-price').value   = gas;
+        if (elec)   document.getElementById('elec-price').value  = elec;
+        if (source) document.getElementById('price-source').value = source;
+        return city && CITIES[city] ? city : null;
+    }
+
+    // ── CO₂ emissions ──────────────────────────────────────────────────────
+    const GAS_CO2_KWH_HEAT = Math.round(1880 / (9.77 * 0.95));  // ≈ 202 g CO₂/kWh heat
+    let gridCarbonIntensity = null;
+    let gridCarbonIsLive    = false;
+
+    async function fetchCarbonIntensity() {
+        try {
+            const data = await fetch('/api/carbon-intensity').then(r => r.json());
+            gridCarbonIntensity = data.carbon_intensity;
+            gridCarbonIsLive    = data.live;
+            updateCarbonDisplay();
+        } catch {}
+    }
+
+    function updateCarbonDisplay() {
+        const el = document.getElementById('co2-display');
+        if (gridCarbonIntensity === null) { el.className = 'co2-card empty'; return; }
+
+        const currentTemp = temperatures[selectedCity] ?? null;
+        const liveTag     = gridCarbonIsLive ? '' : ' <span class="co2-label">estimated avg</span>';
+
+        if (currentTemp === null) {
+            el.innerHTML = `Grid: ${gridCarbonIntensity} gCO₂/kWh${liveTag}`;
+            el.className = 'co2-card';
+            return;
+        }
+
+        const curve = AC_SYSTEMS[acSelect.value];
+        const cop   = lookupCop(currentTemp, curve);
+
+        if (cop === null) {
+            el.innerHTML = `No heating needed · Grid: ${gridCarbonIntensity} gCO₂/kWh${liveTag}`;
+            el.className = 'co2-card';
+            return;
+        }
+
+        const acCo2  = Math.round(gridCarbonIntensity / cop);
+        const gasCo2 = GAS_CO2_KWH_HEAT;
+        const better = acCo2 < gasCo2;
+
+        el.innerHTML = `Gas: <b>${gasCo2}</b> g · AC: <b>${acCo2}</b> g CO₂/kWh heat${liveTag}`;
+        el.className = better ? 'co2-card' : 'co2-card worse';
+    }
+
     // ── Geolocation ────────────────────────────────────────────────────────
     function detectLocation() {
         if (!navigator.geolocation) return;
@@ -850,6 +940,8 @@
         updateAllMarkers();
         updateBreakEven();
         updateCopChart();
+        updateCarbonDisplay();
+        savePrefs();
         const temp = temperatures[selectedCity];
         if (temp != null) runCalculate(selectedCity, temp);
     }
@@ -935,10 +1027,12 @@
     map.on('click', () => { if (window.innerWidth <= 768) closeSidebar(); });
 
     // ── Boot ───────────────────────────────────────────────────────────────
-    selectCity('Amsterdam');
+    const savedCity = loadPrefs();
+    selectCity(savedCity || 'Amsterdam');
     updateBreakEven();
     updateCopChart();
     fetchTemperatures();
+    fetchCarbonIntensity();
     detectLocation();  // silently auto-select nearest city; browser will prompt for permission
 </script>
 </body>
