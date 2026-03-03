@@ -371,6 +371,132 @@
             .cop-panel-title, .cop-panel-system, .cop-legend { display: none; }
         }
 
+        /* ── Product card (below COP legend) ─────────────────────────── */
+        .product-card {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .product-image-wrap {
+            width: 100%;
+            height: 110px;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .product-image-wrap img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* Placeholder shown when image is absent/errors */
+        .product-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .product-placeholder svg {
+            opacity: 0.85;
+        }
+
+        .product-placeholder-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            opacity: 0.6;
+        }
+
+        .product-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .product-name {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text);
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            letter-spacing: 0.2px;
+        }
+
+        .badge-label {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-scop {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        .badge-series {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .datasheet-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 7px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+
+        .datasheet-btn:hover {
+            background: #eff6ff;
+            border-color: #93c5fd;
+            color: #1d4ed8;
+        }
+
+        .datasheet-btn svg {
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 768px) {
+            .product-card { display: none; }
+        }
+
         /* ── Mobile toggle button ─────────────────────────────────────── */
         #sidebar-toggle {
             display: none;
@@ -549,12 +675,34 @@
             <span style="background:#f59e0b;"></span>Huidige buitentemperatuur
         </div>
     </div>
+
+    <div class="product-card" id="product-card">
+        <div class="product-image-wrap" id="product-image-wrap">
+            <!-- filled by JS -->
+        </div>
+        <div class="product-meta-row">
+            <span class="product-name" id="product-name">—</span>
+            <span class="badge badge-label" id="product-label">—</span>
+            <span class="badge badge-scop" id="product-scop">—</span>
+        </div>
+        <div class="badge-series" id="product-series"></div>
+        <a class="datasheet-btn" id="datasheet-btn" href="#" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            Technisch datasheet
+        </a>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     const CITIES     = {{ cities | tojson }};
     const AC_SYSTEMS = {{ ac_systems | tojson }};
+    const AC_META    = {{ ac_meta | tojson }};
 
     // ── State ──────────────────────────────────────────────────────────────
     let temperatures  = {};
@@ -826,6 +974,69 @@
         }
     }
 
+    // ── Product card ───────────────────────────────────────────────────────
+    // Generic wall-AC unit SVG illustration (recolored per brand)
+    function acUnitSVG(color) {
+        const light = color + '22';
+        return `<svg viewBox="0 0 220 100" xmlns="http://www.w3.org/2000/svg" width="180" height="82">
+          <!-- back panel / wall plate -->
+          <rect x="8" y="18" width="204" height="64" rx="10" fill="${light}" stroke="${color}" stroke-width="1.5"/>
+          <!-- front face -->
+          <rect x="14" y="24" width="192" height="52" rx="8" fill="white" stroke="${color}" stroke-width="1"/>
+          <!-- horizontal vane -->
+          <rect x="22" y="64" width="176" height="6" rx="3" fill="${color}" opacity="0.35"/>
+          <!-- slats -->
+          <line x1="22" y1="57" x2="198" y2="57" stroke="${color}" stroke-width="1" opacity="0.25"/>
+          <line x1="22" y1="51" x2="198" y2="51" stroke="${color}" stroke-width="1" opacity="0.18"/>
+          <!-- display panel -->
+          <rect x="76" y="30" width="68" height="16" rx="4" fill="${light}" stroke="${color}" stroke-width="1"/>
+          <!-- display dots -->
+          <circle cx="96" cy="38" r="3" fill="${color}" opacity="0.6"/>
+          <circle cx="110" cy="38" r="3" fill="${color}" opacity="0.4"/>
+          <circle cx="124" cy="38" r="3" fill="${color}" opacity="0.25"/>
+          <!-- left speaker grille dots -->
+          <circle cx="34" cy="36" r="1.5" fill="${color}" opacity="0.35"/>
+          <circle cx="40" cy="36" r="1.5" fill="${color}" opacity="0.35"/>
+          <circle cx="34" cy="42" r="1.5" fill="${color}" opacity="0.35"/>
+          <circle cx="40" cy="42" r="1.5" fill="${color}" opacity="0.35"/>
+          <!-- right status LED -->
+          <circle cx="182" cy="36" r="4" fill="${color}" opacity="0.7"/>
+        </svg>`;
+    }
+
+    function updateProductCard() {
+        const meta = AC_META[acSelect.value];
+        if (!meta) return;
+
+        // Image or placeholder
+        const wrap = document.getElementById('product-image-wrap');
+        wrap.style.background = meta.color + '11';
+        wrap.style.borderColor = meta.color + '55';
+
+        if (meta.image_url) {
+            wrap.innerHTML = `<img src="${meta.image_url}" alt="${meta.brand} ${meta.series}"
+                onerror="this.parentElement.innerHTML = window._acPlaceholder('${meta.color}', '${meta.brand}')">`;
+        } else {
+            wrap.innerHTML = _acPlaceholder(meta.color, meta.brand);
+        }
+
+        document.getElementById('product-name').textContent  = meta.brand;
+        document.getElementById('product-label').textContent = meta.energy_label;
+        document.getElementById('product-scop').textContent  = `SCOP ${meta.scop.toFixed(1)}`;
+        document.getElementById('product-series').textContent = meta.series;
+
+        const btn = document.getElementById('datasheet-btn');
+        btn.href = meta.datasheet_url || meta.product_page || '#';
+    }
+
+    // Exposed globally so the onerror handler can call it
+    window._acPlaceholder = function(color, brand) {
+        return `<div class="product-placeholder" style="background:${color}11">
+            ${acUnitSVG(color)}
+            <span class="product-placeholder-label" style="color:${color}">${brand.toUpperCase()}</span>
+        </div>`;
+    };
+
     // ── COP chart ─────────────────────────────────────────────────────────
     let copChart = null;
 
@@ -1029,6 +1240,7 @@
         updateAllMarkers();
         updateBreakEven();
         updateCopChart();
+        updateProductCard();
         updateCarbonDisplay();
         savePrefs();
         const temp = temperatures[selectedCity];
@@ -1120,6 +1332,7 @@
     selectCity(savedCity || 'Amsterdam');
     updateBreakEven();
     updateCopChart();
+    updateProductCard();
     fetchTemperatures();
     fetchCarbonIntensity();
     detectLocation();  // silently auto-select nearest city; browser will prompt for permission

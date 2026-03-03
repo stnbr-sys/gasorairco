@@ -57,18 +57,41 @@ CITIES: dict[str, tuple[float, float]] = {
     'Zoetermeer':       (52.0574, 4.4938),
 }
 
-def _load_ac_systems() -> dict[str, list[tuple[float, float]]]:
-    """Load COP-vs-temperature curves from cop-data.json (EN14511 manufacturer data)."""
+def _load_cop_data() -> dict:
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cop-data.json')
     with open(path) as f:
-        raw = json.load(f)
+        return json.load(f)
+
+_RAW = _load_cop_data()
+
+def _load_ac_systems() -> dict[str, list[tuple[float, float]]]:
+    """Load COP-vs-temperature curves from cop-data.json (EN14511 manufacturer data)."""
     return {
         s['name']: sorted((float(t), c) for t, c in s['cop_by_temp'].items())
-        for s in raw['systems']
+        for s in _RAW['systems']
+    }
+
+def _load_ac_meta() -> dict:
+    """Load rich product metadata (brand, series, label, image, datasheet) per system."""
+    return {
+        s['name']: {
+            'id':            s['id'],
+            'brand':         s['brand'],
+            'series':        s['series'],
+            'energy_label':  s['energy_label'],
+            'scop':          s['scop'],
+            'seer':          s.get('seer'),
+            'color':         s['color'],
+            'image_url':     s.get('image_url'),
+            'product_page':  s.get('product_page'),
+            'datasheet_url': s.get('datasheet_url'),
+        }
+        for s in _RAW['systems']
     }
 
 # Keys: system display name → sorted [(outdoor_°C, COP), …]
 AC_SYSTEMS: dict[str, list[tuple[float, float]]] = _load_ac_systems()
+AC_META: dict = _load_ac_meta()
 
 GAS_ENERGY_CONTENT = 9.77   # kWh/m³  (Gronings/L-gas)
 BOILER_EFFICIENCY  = 0.95   # modern HR condensing boiler
@@ -125,7 +148,7 @@ def find_break_even(curve: list[tuple[float, float]], gas_cost_kwh: float, elec_
 
 @app.route('/')
 def index():
-    return render_template('index.html', cities=CITIES, ac_systems=AC_SYSTEMS)
+    return render_template('index.html', cities=CITIES, ac_systems=AC_SYSTEMS, ac_meta=AC_META)
 
 
 
