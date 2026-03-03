@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GasOrAirco — Heating Cost Advisor</title>
+    <title>CVofAC.nl — Slimme verwarmingskeuze</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
         :root {
             --bg:          #f8fafc;
-            --sidebar-bg:  #ffffff;
             --border:      #e2e8f0;
             --text:        #1e293b;
             --text-muted:  #64748b;
@@ -26,7 +28,7 @@
         body {
             display: flex;
             height: 100vh;
-            font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
             font-size: 14px;
             background: var(--bg);
             color: var(--text);
@@ -41,50 +43,72 @@
             flex-direction: column;
             gap: 14px;
             overflow-y: auto;
-            background: var(--sidebar-bg);
-            border-right: 1px solid var(--border);
+            background: #0f172a;
+            color: #f1f5f9;
+            border-right: 1px solid #1e293b;
             box-shadow: var(--shadow);
             z-index: 10;
         }
 
         #map { flex: 1; }
 
+        /* ── Sidebar header ───────────────────────────────────────────── */
+        .sidebar-header {
+            padding-bottom: 16px;
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-mark {
+            flex-shrink: 0;
+        }
+
         /* ── Typography ───────────────────────────────────────────────── */
         .app-title {
-            font-size: 22px;
-            font-weight: 700;
-            color: #0f172a;
+            font-size: 20px;
+            font-weight: 800;
+            color: #f8fafc;
             letter-spacing: -0.5px;
         }
 
+        .app-title .cv { color: #fb923c; }
+        .app-title .ac { color: #60a5fa; }
+
         .app-subtitle {
             font-size: 11px;
-            color: var(--text-subtle);
-            margin-top: -10px;
+            color: #475569;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
         }
 
         .section-label {
             font-size: 10px;
             font-weight: 700;
-            color: var(--text-subtle);
+            color: #475569;
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: -4px;
         }
 
-        #city-name { font-size: 15px; font-weight: 600; color: var(--text); }
+        #city-name { font-size: 15px; font-weight: 600; color: #f1f5f9; }
 
-        .hint { font-size: 11px; color: var(--text-subtle); font-style: italic; }
+        .hint { font-size: 11px; color: #64748b; font-style: italic; }
 
-        #temp-display { font-size: 13px; color: var(--text-muted); }
-        #cop-display  { font-size: 12px; color: var(--text-muted); }
+        #temp-display { font-size: 13px; color: #94a3b8; }
+        #cop-display  { font-size: 12px; color: #94a3b8; }
 
         /* ── Divider ──────────────────────────────────────────────────── */
         hr {
             border: none;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid #1e293b;
             margin: 2px 0;
         }
 
@@ -92,19 +116,19 @@
         select, input[type="number"] {
             width: 100%;
             padding: 7px 10px;
-            border: 1px solid #cbd5e1;
+            border: 1px solid #334155;
             border-radius: var(--radius);
             font-size: 13px;
             font-family: inherit;
-            color: var(--text);
-            background: var(--input-bg);
+            color: #f1f5f9;
+            background: #1e293b;
             transition: border-color 0.15s, box-shadow 0.15s;
             appearance: none;
             -webkit-appearance: none;
         }
 
         select {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23f1f5f9' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
             background-position: right 10px center;
             padding-right: 28px;
@@ -112,12 +136,16 @@
 
         select:focus, input[type="number"]:focus {
             outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(96,165,250,0.15);
         }
 
         select:hover, input[type="number"]:hover {
-            border-color: #93c5fd;
+            border-color: #475569;
+        }
+
+        input[type="checkbox"] {
+            accent-color: #60a5fa;
         }
 
         /* ── Price row ────────────────────────────────────────────────── */
@@ -130,7 +158,7 @@
         .price-row label {
             flex: 1;
             font-size: 13px;
-            color: var(--text-muted);
+            color: #94a3b8;
             white-space: nowrap;
         }
 
@@ -146,11 +174,10 @@
             align-items: center;
             gap: 7px;
             font-size: 12px;
-            color: var(--text-muted);
+            color: #94a3b8;
         }
 
         .dynamic-row input[type="checkbox"] {
-            accent-color: var(--accent);
             width: 14px;
             height: 14px;
             cursor: pointer;
@@ -158,42 +185,59 @@
 
         .dynamic-info {
             font-size: 10px;
-            color: var(--text-subtle);
+            color: #64748b;
             font-style: italic;
             line-height: 1.4;
         }
 
-        /* ── Result cards ─────────────────────────────────────────────── */
-        .cost-line { font-size: 13px; color: var(--text-muted); }
-
-        #recommendation {
-            font-size: 15px;
+        .sub-label {
+            font-size: 9px;
             font-weight: 700;
-            padding: 10px 14px;
-            border-radius: var(--radius);
-            text-align: center;
-            transition: background 0.2s, color 0.2s;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
         }
 
-        #recommendation.airco { color: #1d4ed8; background: #dbeafe; }
-        #recommendation.gas   { color: #b91c1c; background: #fee2e2; }
-        #recommendation.none  { color: #15803d; background: #dcfce7; }
-        #recommendation.wait  { color: var(--text-subtle); background: #f1f5f9; }
+        /* ── Result cards ─────────────────────────────────────────────── */
+        .cost-line { font-size: 13px; color: #94a3b8; }
 
-        #savings { font-size: 12px; color: var(--text-muted); text-align: center; }
+        #recommendation {
+            border-radius: 10px;
+            font-size: 16px;
+            padding: 14px 16px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            text-align: center;
+            transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+        }
+
+        #recommendation.airco {
+            color: #bfdbfe;
+            background: #1e3a5f;
+            box-shadow: 0 0 0 1px #1d4ed8, 0 4px 12px rgba(29,78,216,0.35);
+        }
+        #recommendation.gas {
+            color: #fed7aa;
+            background: #431407;
+            box-shadow: 0 0 0 1px #b91c1c, 0 4px 12px rgba(185,28,28,0.35);
+        }
+        #recommendation.none  { color: #86efac; background: #052e16; }
+        #recommendation.wait  { color: #94a3b8;  background: #1e293b; }
+
+        #savings { font-size: 12px; color: #94a3b8; text-align: center; }
 
         /* ── Break-even card ──────────────────────────────────────────── */
         .break-even-card {
             font-size: 12px;
             padding: 8px 11px;
             border-radius: var(--radius);
-            border: 1px solid #bae6fd;
-            background: #f0f9ff;
-            color: #0369a1;
+            border: 1px solid #1d4ed8;
+            background: #172554;
+            color: #93c5fd;
             font-weight: 600;
         }
-        .break-even-card.ac  { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; font-weight: normal; }
-        .break-even-card.gas { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: normal; }
+        .break-even-card.ac  { background: #172554; border-color: #2563eb; color: #bfdbfe; font-weight: normal; }
+        .break-even-card.gas { background: #431407; border-color: #c2410c; color: #fed7aa; font-weight: normal; }
         .break-even-card.empty { display: none; }
 
         /* ── CO₂ card ─────────────────────────────────────────────────── */
@@ -201,28 +245,28 @@
             font-size: 12px;
             padding: 8px 11px;
             border-radius: var(--radius);
-            border: 1px solid #d1fae5;
-            background: #f0fdf4;
-            color: #065f46;
+            border: 1px solid #15803d;
+            background: #052e16;
+            color: #86efac;
             line-height: 1.5;
         }
-        .co2-card.worse  { background: #fff7ed; border-color: #fed7aa; color: #92400e; }
+        .co2-card.worse  { background: #431407; border-color: #c2410c; color: #fed7aa; }
         .co2-card.empty  { display: none; }
         .co2-card .co2-label { font-size: 10px; color: inherit; opacity: 0.7; display: block; margin-bottom: 2px; }
 
         /* ── Location button ──────────────────────────────────────────── */
         #locate-btn {
-            background: none;
-            border: 1px solid var(--border);
+            background: #1e293b;
+            border: 1px solid #334155;
             border-radius: 6px;
             padding: 2px 8px;
             font-size: 15px;
             cursor: pointer;
-            color: var(--text-muted);
-            transition: background 0.15s, border-color 0.15s;
+            color: #94a3b8;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
             line-height: 1.6;
         }
-        #locate-btn:hover  { background: #f1f5f9; border-color: var(--accent); }
+        #locate-btn:hover  { background: #334155; color: #f1f5f9; }
         #locate-btn:disabled { opacity: 0.5; cursor: default; }
 
         /* ── Loading overlay ──────────────────────────────────────────── */
@@ -248,10 +292,20 @@
             flex-direction: column;
             gap: 12px;
             padding: 20px 16px;
-            background: var(--sidebar-bg);
-            border-left: 1px solid var(--border);
+            background: #ffffff;
+            border-left: 1px solid #e2e8f0;
             box-shadow: var(--shadow);
             overflow: hidden;
+            position: relative;
+        }
+
+        #cop-panel::before {
+            content: '';
+            display: block;
+            height: 3px;
+            background: linear-gradient(90deg, #fb923c, #3b82f6);
+            margin: -20px -16px 16px;
+            flex-shrink: 0;
         }
 
         .cop-panel-title {
@@ -312,6 +366,7 @@
                 padding: 12px 16px;
                 gap: 10px;
             }
+            #cop-panel::before { display: none; }
             .cop-chart-wrap { flex: 1; min-width: 0; }
             .cop-panel-title, .cop-panel-system, .cop-legend { display: none; }
         }
@@ -323,14 +378,15 @@
             top: 12px;
             left: 12px;
             z-index: 1100;
-            background: white;
-            border: 1px solid var(--border);
+            background: #0f172a;
+            border: 1px solid #334155;
             border-radius: var(--radius);
             padding: 8px 13px;
             font-size: 18px;
             line-height: 1;
             cursor: pointer;
             box-shadow: var(--shadow);
+            color: #f1f5f9;
         }
 
         /* ── Mobile layout ────────────────────────────────────────────── */
@@ -347,7 +403,7 @@
                 z-index: 1050;
                 transform: translateX(-100%);
                 transition: transform 0.25s ease;
-                box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+                box-shadow: 4px 0 16px rgba(0,0,0,0.4);
                 width: min(300px, 88vw);
             }
 
@@ -359,7 +415,7 @@
                 display: none;
                 position: fixed;
                 inset: 0;
-                background: rgba(15,23,42,0.35);
+                background: rgba(15,23,42,0.5);
                 z-index: 1040;
                 backdrop-filter: blur(2px);
             }
@@ -374,51 +430,83 @@
 <div id="sidebar-backdrop"></div>
 
 <div id="sidebar">
-    <div class="app-title">GasOrAirco</div>
-    <div class="app-subtitle">Heating Cost Advisor</div>
-
-    <hr>
+    <div class="sidebar-header">
+        <div class="logo-row">
+            <svg class="logo-mark" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="flame-grad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#fb923c"/>
+                        <stop offset="100%" stop-color="#ef4444"/>
+                    </linearGradient>
+                    <linearGradient id="snow-grad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stop-color="#60a5fa"/>
+                        <stop offset="100%" stop-color="#3b82f6"/>
+                    </linearGradient>
+                    <clipPath id="left-half"><rect x="0" y="0" width="14" height="28"/></clipPath>
+                    <clipPath id="right-half"><rect x="14" y="0" width="14" height="28"/></clipPath>
+                </defs>
+                <!-- Background circle -->
+                <circle cx="14" cy="14" r="13" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+                <!-- Flame (left half) -->
+                <g clip-path="url(#left-half)">
+                    <path d="M14 22 C8 22 6 18 8 14 C9 17 11 16 10 12 C12 13 13 11 12 8 C15 10 16 13 14 17 C16 15 17 12 15 9 C18 12 18 17 14 22Z" fill="url(#flame-grad)"/>
+                </g>
+                <!-- Snowflake lines (right half) -->
+                <g clip-path="url(#right-half)" stroke="url(#snow-grad)" stroke-width="1.5" stroke-linecap="round">
+                    <line x1="14" y1="7" x2="14" y2="21"/>
+                    <line x1="8.3" y1="10.5" x2="19.7" y2="17.5"/>
+                    <line x1="19.7" y1="10.5" x2="8.3" y2="17.5"/>
+                    <line x1="14" y1="7" x2="12" y2="9.5"/>
+                    <line x1="14" y1="7" x2="16" y2="9.5"/>
+                    <line x1="14" y1="21" x2="12" y2="18.5"/>
+                    <line x1="14" y1="21" x2="16" y2="18.5"/>
+                </g>
+            </svg>
+            <div class="app-title"><span class="cv">CV</span>of<span class="ac">AC</span>.nl</div>
+        </div>
+        <div class="app-subtitle">Slimme Verwarmingskeuze</div>
+    </div>
 
     <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
         <div id="city-name">City: Amsterdam</div>
         <button id="locate-btn" title="Detect my location">📍</button>
     </div>
-    <div class="hint">Click a city on the map</div>
+    <div class="hint">Klik op een stad op de kaart</div>
     <div id="temp-display">Outdoor temp: loading…</div>
 
     <hr>
 
-    <div class="section-label">AC System</div>
+    <div class="section-label">AC Systeem</div>
     <select id="ac-select"></select>
     <div id="cop-display">COP: —</div>
 
     <hr>
 
-    <div class="section-label">Energy Prices</div>
+    <div class="section-label">Energieprijzen</div>
 
-    <div class="section-label" style="margin-top:2px; font-size:9px;">Dynamic price source</div>
+    <div class="sub-label" style="margin-top:2px;">Dynamische prijsbron</div>
     <select id="price-source">
         <option value="energyzero">EnergyZero</option>
         <option value="easyenergy">Easyenergy</option>
     </select>
 
     <div class="price-row">
-        <label>Gas price (€/m³):</label>
+        <label>Gasprijs (€/m³):</label>
         <input type="number" id="gas-price" value="1.25" step="0.01" min="0">
     </div>
     <div class="dynamic-row">
         <input type="checkbox" id="dynamic-gas-check">
-        <label for="dynamic-gas-check">Live dynamic price</label>
+        <label for="dynamic-gas-check">Live dynamische prijs</label>
     </div>
     <div id="dynamic-gas-info" class="dynamic-info"></div>
 
     <div class="price-row">
-        <label>Electricity price (€/kWh):</label>
+        <label>Stroomprijs (€/kWh):</label>
         <input type="number" id="elec-price" value="0.32" step="0.01" min="0">
     </div>
     <div class="dynamic-row">
         <input type="checkbox" id="dynamic-check">
-        <label for="dynamic-check">Live dynamic price</label>
+        <label for="dynamic-check">Live dynamische prijs</label>
     </div>
     <div id="dynamic-info" class="dynamic-info"></div>
 
@@ -426,39 +514,39 @@
 
     <div id="gas-cost" class="cost-line">Gas: —</div>
     <div id="airco-cost" class="cost-line">AC: —</div>
-    <div id="recommendation" class="wait">Loading…</div>
+    <div id="recommendation" class="wait">Laden…</div>
     <div id="savings"></div>
 
     <hr>
 
-    <div class="section-label">Break-Even Temperature</div>
+    <div class="section-label">Break-Even Temperatuur</div>
     <div id="break-even" class="break-even-card empty"></div>
 
     <hr>
 
-    <div class="section-label">CO₂ Emissions</div>
+    <div class="section-label">CO₂ Uitstoot</div>
     <div id="co2-display" class="co2-card empty"></div>
 </div>
 
 <div id="map">
-    <div id="loading-overlay">Loading temperatures…</div>
+    <div id="loading-overlay">Temperaturen laden…</div>
 </div>
 
 <div id="cop-panel">
-    <div class="cop-panel-title">COP vs Temperature</div>
+    <div class="cop-panel-title">COP vs Temperatuur</div>
     <div class="cop-panel-system" id="chart-system-label">—</div>
     <div class="cop-chart-wrap">
         <canvas id="cop-chart"></canvas>
     </div>
     <div class="cop-legend">
         <div class="cop-legend-item">
-            <span style="background:#3b82f6;"></span>AC COP (selected system)
+            <span style="background:#3b82f6;"></span>AC COP (geselecteerd systeem)
         </div>
         <div class="cop-legend-item">
-            <span style="background:#ef4444; height:1px; border-top:2px dashed #ef4444; background:none;"></span>Gas cost equivalent
+            <span style="background:#ef4444; height:1px; border-top:2px dashed #ef4444; background:none;"></span>Gas kosten equivalent
         </div>
         <div class="cop-legend-item">
-            <span style="background:#f59e0b;"></span>Current outdoor temp
+            <span style="background:#f59e0b;"></span>Huidige buitentemperatuur
         </div>
     </div>
 </div>
@@ -485,9 +573,10 @@
 
     // ── Leaflet map ────────────────────────────────────────────────────────
     const map = L.map('map').setView([52.25, 5.30], 7);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 18,
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
     }).addTo(map);
 
     // ── Color scale (approximates matplotlib RdYlBu_r) ────────────────────
@@ -599,14 +688,14 @@
         if (temp != null) {
             runCalculate(city, temp);
         } else {
-            document.getElementById('recommendation').textContent = 'Temperature unknown';
+            document.getElementById('recommendation').textContent = 'Temperatuur onbekend';
             document.getElementById('recommendation').className = 'wait';
         }
     }
 
     function updateTempDisplay(temp) {
         document.getElementById('temp-display').textContent =
-            temp != null ? `Outdoor temp: ${temp.toFixed(1)}°C` : 'Outdoor temp: unknown';
+            temp != null ? `Buitentemp: ${temp.toFixed(1)}°C` : 'Buitentemp: onbekend';
     }
 
     // ── API: calculate ─────────────────────────────────────────────────────
@@ -616,7 +705,7 @@
         const elecPrice = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
 
         if (isNaN(gasPrice) || isNaN(elecPrice) || gasPrice < 0 || elecPrice < 0) {
-            document.getElementById('recommendation').textContent = 'Enter valid prices';
+            document.getElementById('recommendation').textContent = 'Voer geldige prijzen in';
             document.getElementById('recommendation').className = 'wait';
             return;
         }
@@ -636,7 +725,7 @@
             });
             data = await resp.json();
         } catch {
-            document.getElementById('recommendation').textContent = 'Connection error';
+            document.getElementById('recommendation').textContent = 'Verbindingsfout';
             document.getElementById('recommendation').className = 'wait';
             return;
         }
@@ -644,24 +733,24 @@
         document.getElementById('cop-display').textContent =
             data.cop != null ? `COP: ${data.cop.toFixed(2)}` : 'COP: —';
         document.getElementById('gas-cost').textContent =
-            `Gas: €${data.gas_cost_kwh.toFixed(3)}/kWh heat`;
+            `Gas: €${data.gas_cost_kwh.toFixed(3)}/kWh warmte`;
 
         if (data.recommendation === 'none') {
             document.getElementById('airco-cost').textContent = 'AC: COP N/A';
-            document.getElementById('recommendation').textContent = '☀️ No heating needed';
+            document.getElementById('recommendation').textContent = '☀️ Geen verwarming nodig';
             document.getElementById('recommendation').className = 'none';
             document.getElementById('savings').textContent = '';
         } else {
             document.getElementById('airco-cost').textContent =
-                `AC: €${data.airco_cost_kwh.toFixed(3)}/kWh heat`;
+                `AC: €${data.airco_cost_kwh.toFixed(3)}/kWh warmte`;
             document.getElementById('savings').textContent =
-                `Savings: €${data.savings.toFixed(3)}/kWh`;
+                `Besparing: €${data.savings.toFixed(3)}/kWh`;
 
             if (data.recommendation === 'airco') {
-                document.getElementById('recommendation').textContent = '❄️ Use AC';
+                document.getElementById('recommendation').textContent = '❄️ Gebruik AC';
                 document.getElementById('recommendation').className = 'airco';
             } else {
-                document.getElementById('recommendation').textContent = '🔥 Use GAS';
+                document.getElementById('recommendation').textContent = '🔥 Gebruik GAS';
                 document.getElementById('recommendation').className = 'gas';
             }
         }
@@ -685,7 +774,7 @@
                 temperatures[city] = entries[i]?.current_weather?.temperature ?? null;
             });
         } catch (e) {
-            overlay.textContent = 'Loading failed';
+            overlay.textContent = 'Laden mislukt';
             return;
         } finally {
             overlay.style.display = 'none';
@@ -724,13 +813,13 @@
         const gasCostKwh = gasPrice / (9.77 * 0.95);
         const be = findBreakEven(AC_SYSTEMS[acSelect.value], gasCostKwh, elecPrice);
         if (be.type === 'break_even') {
-            el.textContent = `${be.temp.toFixed(1)}°C — AC cheaper above this temperature`;
+            el.textContent = `${be.temp.toFixed(1)}°C — AC goedkoper boven deze temp`;
             el.className = 'break-even-card';
         } else if (be.type === 'ac_always') {
-            el.textContent = 'AC always cheaper at these prices';
+            el.textContent = 'AC altijd goedkoper bij deze prijzen';
             el.className = 'break-even-card ac';
         } else if (be.type === 'gas_always') {
-            el.textContent = 'Gas always cheaper at these prices';
+            el.textContent = 'Gas altijd goedkoper bij deze prijzen';
             el.className = 'break-even-card gas';
         } else {
             el.className = 'break-even-card empty';
@@ -826,7 +915,7 @@
                     scales: {
                         x: {
                             type: 'linear', min: -15, max: 20,
-                            title: { display: true, text: 'Outdoor temp (°C)', font: { size: 10 }, color: '#64748b' },
+                            title: { display: true, text: 'Buitentemp (°C)', font: { size: 10 }, color: '#64748b' },
                             ticks: { font: { size: 9 }, color: '#64748b', stepSize: 5 },
                             grid: { color: '#f1f5f9' },
                         },
@@ -885,10 +974,10 @@
         if (gridCarbonIntensity === null) { el.className = 'co2-card empty'; return; }
 
         const currentTemp = temperatures[selectedCity] ?? null;
-        const liveTag     = gridCarbonIsLive ? '' : ' <span class="co2-label">estimated avg</span>';
+        const liveTag     = gridCarbonIsLive ? '' : ' <span class="co2-label">geschatte gem.</span>';
 
         if (currentTemp === null) {
-            el.innerHTML = `Grid: ${gridCarbonIntensity} gCO₂/kWh${liveTag}`;
+            el.innerHTML = `Net: ${gridCarbonIntensity} gCO₂/kWh${liveTag}`;
             el.className = 'co2-card';
             return;
         }
@@ -897,7 +986,7 @@
         const cop   = lookupCop(currentTemp, curve);
 
         if (cop === null) {
-            el.innerHTML = `No heating needed · Grid: ${gridCarbonIntensity} gCO₂/kWh${liveTag}`;
+            el.innerHTML = `Geen verwarming nodig · Net: ${gridCarbonIntensity} gCO₂/kWh${liveTag}`;
             el.className = 'co2-card';
             return;
         }
@@ -906,7 +995,7 @@
         const gasCo2 = GAS_CO2_KWH_HEAT;
         const better = acCo2 < gasCo2;
 
-        el.innerHTML = `Gas: <b>${gasCo2}</b> g · AC: <b>${acCo2}</b> g CO₂/kWh heat${liveTag}`;
+        el.innerHTML = `Gas: <b>${gasCo2}</b> g · AC: <b>${acCo2}</b> g CO₂/kWh warmte${liveTag}`;
         el.className = better ? 'co2-card' : 'co2-card worse';
     }
 
@@ -962,23 +1051,23 @@
         async function fetchPrice() {
             const source = priceSource.value;
             input.disabled = true;
-            info.textContent = 'Loading…';
+            info.textContent = 'Laden…';
             try {
                 const resp = await fetch(`${baseUrl}?source=${source}`);
                 const data = await resp.json();
                 if (data.error) {
-                    info.textContent = `Error: ${data.error}`;
+                    info.textContent = `Fout: ${data.error}`;
                     check.checked = false;
                     input.disabled = false;
                     return;
                 }
                 input.value = data.price.toFixed(4);
                 info.textContent = `€${data.price.toFixed(4)}/${unit} all-in`
-                    + ` (spot €${data.spot.toFixed(4)} + tax €${data.tax.toFixed(4)} + VAT 21%)`
+                    + ` (spot €${data.spot.toFixed(4)} + tax €${data.tax.toFixed(4)} + BTW 21%)`
                     + ` · ${data.source} · ${data.time}`;
                 onInputChange();
             } catch {
-                info.textContent = 'Fetch failed';
+                info.textContent = 'Ophalen mislukt';
                 check.checked = false;
                 input.disabled = false;
             }
