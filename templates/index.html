@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GasOrAirco — Heating Cost Advisor</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
         :root {
             --bg:          #f8fafc;
@@ -224,6 +226,66 @@
             backdrop-filter: blur(4px);
         }
 
+        /* ── COP panel (right) ────────────────────────────────────────── */
+        #cop-panel {
+            width: 260px;
+            min-width: 260px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 20px 16px;
+            background: var(--sidebar-bg);
+            border-left: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .cop-panel-title {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-subtle);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .cop-panel-system {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.3;
+            margin-top: -6px;
+        }
+
+        .cop-chart-wrap {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+
+        .cop-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .cop-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        .cop-legend-item span {
+            display: inline-block;
+            width: 22px;
+            height: 2px;
+            border-radius: 1px;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 1100px) { #cop-panel { display: none; } }
+
         /* ── Mobile toggle button ─────────────────────────────────────── */
         #sidebar-toggle {
             display: none;
@@ -343,6 +405,25 @@
 
 <div id="map">
     <div id="loading-overlay">Loading temperatures…</div>
+</div>
+
+<div id="cop-panel">
+    <div class="cop-panel-title">COP vs Temperature</div>
+    <div class="cop-panel-system" id="chart-system-label">—</div>
+    <div class="cop-chart-wrap">
+        <canvas id="cop-chart"></canvas>
+    </div>
+    <div class="cop-legend">
+        <div class="cop-legend-item">
+            <span style="background:#3b82f6;"></span>AC COP (selected system)
+        </div>
+        <div class="cop-legend-item">
+            <span style="background:#ef4444; height:1px; border-top:2px dashed #ef4444; background:none;"></span>Gas cost equivalent
+        </div>
+        <div class="cop-legend-item">
+            <span style="background:#f59e0b;"></span>Current outdoor temp
+        </div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -474,6 +555,7 @@
 
         const temp = temperatures[city];
         updateTempDisplay(temp);
+        updateCopChart();
 
         if (temp != null) {
             runCalculate(city, temp);
@@ -574,6 +656,7 @@
 
         const temp = temperatures[selectedCity];
         updateTempDisplay(temp);
+        updateCopChart();
         if (temp != null) runCalculate(selectedCity, temp);
     }
 
@@ -614,6 +697,111 @@
         }
     }
 
+    // ── COP chart ─────────────────────────────────────────────────────────
+    let copChart = null;
+
+    function updateCopChart() {
+        const curve     = AC_SYSTEMS[acSelect.value];
+        const gasPrice  = parseFloat(document.getElementById('gas-price').value.replace(',', '.'));
+        const elecPrice = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
+        const currentTemp = temperatures[selectedCity] ?? null;
+
+        // Build smooth COP curve: -15 to +20°C in 0.5° steps
+        const labels = [], copData = [];
+        for (let t = -15; t <= 20; t += 0.5) {
+            labels.push(t);
+            copData.push(lookupCop(t, curve));
+        }
+
+        // Annotations: current temp (vertical) + gas-equivalent COP (horizontal)
+        const annotations = {};
+        if (currentTemp !== null) {
+            annotations.currentTemp = {
+                type: 'line', xMin: currentTemp, xMax: currentTemp,
+                borderColor: '#f59e0b', borderWidth: 2, borderDash: [5, 4],
+                label: {
+                    content: `${currentTemp.toFixed(1)}°C`, display: true,
+                    position: 'start', yAdjust: 6,
+                    backgroundColor: 'rgba(245,158,11,0.12)', color: '#b45309',
+                    font: { size: 9, weight: 'bold' }, padding: { x: 4, y: 2 },
+                    borderRadius: 3,
+                },
+            };
+        }
+        const gasCostKwh = (!isNaN(gasPrice) && gasPrice > 0) ? gasPrice / (9.77 * 0.95) : null;
+        const requiredCop = (gasCostKwh && !isNaN(elecPrice) && elecPrice > 0)
+            ? elecPrice / gasCostKwh : null;
+        if (requiredCop !== null) {
+            annotations.gasCop = {
+                type: 'line', yMin: requiredCop, yMax: requiredCop,
+                borderColor: '#ef4444', borderWidth: 1.5, borderDash: [6, 3],
+                label: {
+                    content: `Gas COP ${requiredCop.toFixed(2)}`, display: true,
+                    position: 'end', xAdjust: -4,
+                    backgroundColor: 'rgba(239,68,68,0.10)', color: '#b91c1c',
+                    font: { size: 9 }, padding: { x: 4, y: 2 }, borderRadius: 3,
+                },
+            };
+        }
+
+        document.getElementById('chart-system-label').textContent = acSelect.value;
+
+        const chartData = {
+            labels,
+            datasets: [{
+                label: 'COP',
+                data: copData,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.07)',
+                borderWidth: 2.5,
+                pointRadius: 0,
+                tension: 0.35,
+                fill: true,
+            }],
+        };
+
+        if (copChart) {
+            copChart.data = chartData;
+            copChart.options.plugins.annotation.annotations = annotations;
+            copChart.update('none');
+        } else {
+            const ctx = document.getElementById('cop-chart').getContext('2d');
+            copChart = new Chart(ctx, {
+                type: 'line',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: items => `${Number(items[0].label).toFixed(1)}°C`,
+                                label: item => `COP: ${item.parsed.y.toFixed(2)}`,
+                            },
+                        },
+                        annotation: { annotations },
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear', min: -15, max: 20,
+                            title: { display: true, text: 'Outdoor temp (°C)', font: { size: 10 }, color: '#64748b' },
+                            ticks: { font: { size: 9 }, color: '#64748b', stepSize: 5 },
+                            grid: { color: '#f1f5f9' },
+                        },
+                        y: {
+                            min: 0,
+                            title: { display: true, text: 'COP', font: { size: 10 }, color: '#64748b' },
+                            ticks: { font: { size: 9 }, color: '#64748b' },
+                            grid: { color: '#f1f5f9' },
+                        },
+                    },
+                },
+            });
+        }
+    }
+
     // ── Geolocation ────────────────────────────────────────────────────────
     function detectLocation() {
         if (!navigator.geolocation) return;
@@ -643,6 +831,7 @@
     function onInputChange() {
         updateAllMarkers();
         updateBreakEven();
+        updateCopChart();
         const temp = temperatures[selectedCity];
         if (temp != null) runCalculate(selectedCity, temp);
     }
@@ -730,6 +919,7 @@
     // ── Boot ───────────────────────────────────────────────────────────────
     selectCity('Amsterdam');
     updateBreakEven();
+    updateCopChart();
     fetchTemperatures();
     detectLocation();  // silently auto-select nearest city; browser will prompt for permission
 </script>
