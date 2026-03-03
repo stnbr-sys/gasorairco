@@ -284,7 +284,23 @@
             flex-shrink: 0;
         }
 
-        @media (max-width: 1100px) { #cop-panel { display: none; } }
+        @media (max-width: 768px) {
+            /* Stack map + chart vertically on mobile */
+            #cop-panel {
+                width: 100%;
+                min-width: 0;
+                height: 260px;
+                min-height: 260px;
+                flex-direction: row;
+                align-items: stretch;
+                border-left: none;
+                border-top: 1px solid var(--border);
+                padding: 12px 16px;
+                gap: 10px;
+            }
+            .cop-chart-wrap { flex: 1; min-width: 0; }
+            .cop-panel-title, .cop-panel-system, .cop-legend { display: none; }
+        }
 
         /* ── Mobile toggle button ─────────────────────────────────────── */
         #sidebar-toggle {
@@ -305,6 +321,8 @@
 
         /* ── Mobile layout ────────────────────────────────────────────── */
         @media (max-width: 768px) {
+            body { flex-direction: column; }
+
             #sidebar-toggle { display: block; }
 
             #sidebar {
@@ -321,7 +339,7 @@
 
             #sidebar.open { transform: translateX(0); }
 
-            #map { width: 100%; }
+            #map { flex: 1; min-height: 0; width: 100%; }
 
             #sidebar-backdrop {
                 display: none;
