@@ -98,6 +98,16 @@ BOILER_EFFICIENCY  = 0.95   # modern HR condensing boiler
 GAS_CO2_G_PER_M3   = 1880  # g CO₂/m³ natural gas (combustion, IPCC AR6)
 NL_GRID_CO2_FALLBACK = 300  # g CO₂/kWh — Dutch grid average estimate (no live token)
 
+WOOD_STOVE_EFFICIENCY = 0.75   # modern houtkachel (EN13229 avg)
+WOOD_TYPES: dict[str, int] = {  # kWh per m³ gestapeld hout, ~20% vochtgehalte
+    'Beuk':     1950,   # Beech
+    'Eiken':    1850,   # Oak
+    'Es':       1900,   # Ash
+    'Berk':     1750,   # Birch
+    'Den/Spar': 1350,   # Pine / Spruce
+    'Populier': 1150,   # Poplar
+}
+
 # ---------------------------------------------------------------------------
 # Core functions
 # ---------------------------------------------------------------------------
@@ -148,7 +158,8 @@ def find_break_even(curve: list[tuple[float, float]], gas_cost_kwh: float, elec_
 
 @app.route('/')
 def index():
-    return render_template('index.html', cities=CITIES, ac_systems=AC_SYSTEMS, ac_meta=AC_META)
+    return render_template('index.html', cities=CITIES, ac_systems=AC_SYSTEMS, ac_meta=AC_META,
+                           wood_types=WOOD_TYPES, wood_stove_efficiency=WOOD_STOVE_EFFICIENCY)
 
 
 
