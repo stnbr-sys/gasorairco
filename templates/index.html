@@ -842,24 +842,21 @@
     const stookIndicator = document.getElementById('stookwijzer-indicator');
     stookIndicator.className = 'sw-unknown';
     stookIndicator.textContent = '🪵 Stookwijzer…';
-    stookIndicator.style.display = '';
+    stookIndicator.style.display = 'block';
 
     function updateStookwijzerUI() {
         // Top indicator — always visible
+        stookIndicator.style.display = 'block';
         if (!stookwijzerAdvice) {
-            stookIndicator.style.display = '';
             stookIndicator.className = 'sw-unknown';
-            stookIndicator.textContent = '🪵 Stookwijzer…';
+            stookIndicator.textContent = '🪵 Stookwijzer: onbekend';
         } else if (stookwijzerAdvice === 'code_red') {
-            stookIndicator.style.display = '';
             stookIndicator.className = 'sw-red';
             stookIndicator.textContent = '🚫 Stookalarm';
         } else if (stookwijzerAdvice === 'code_orange') {
-            stookIndicator.style.display = '';
             stookIndicator.className = 'sw-orange';
             stookIndicator.textContent = '⚠️ Stookwijzer: ongunstig';
         } else {
-            stookIndicator.style.display = '';
             stookIndicator.className = 'sw-yellow';
             stookIndicator.textContent = '✅ Stookwijzer: gunstig';
         }
@@ -870,11 +867,11 @@
             stookBanner.style.display = 'none';
             stookBanner.className = '';
         } else if (stookwijzerAdvice === 'code_orange') {
-            stookBanner.style.display = '';
+            stookBanner.style.display = 'block';
             stookBanner.className = 'sw-orange';
             stookBanner.textContent = '⚠️ Ongunstig — liever niet stoken vandaag';
         } else if (stookwijzerAdvice === 'code_red') {
-            stookBanner.style.display = '';
+            stookBanner.style.display = 'block';
             stookBanner.className = 'sw-red';
             stookBanner.textContent = '🚫 Stookalarm! Gebruik de houtkachel niet — slechte luchtkwaliteit';
         }
