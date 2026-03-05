@@ -197,6 +197,17 @@
         }
         #wood-options.visible { display: flex; }
 
+        #stookwijzer-indicator {
+            display: none;
+            font-size: 11px;
+            padding: 4px 9px;
+            border-radius: 5px;
+            font-weight: 600;
+        }
+        #stookwijzer-indicator.sw-yellow { background: #1a2e05; color: #a3e635; border: 1px solid #4d7c0f; }
+        #stookwijzer-indicator.sw-orange { background: #431407; color: #fed7aa; border: 1px solid #b45309; }
+        #stookwijzer-indicator.sw-red    { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
+
         #stookwijzer-banner {
             display: none;
             border-radius: 7px;
@@ -626,6 +637,7 @@
     </div>
     <div class="hint">Klik op een stad op de kaart</div>
     <div id="temp-display">Outdoor temp: loading…</div>
+    <div id="stookwijzer-indicator"></div>
 
     <hr>
 
@@ -823,34 +835,45 @@
     }
 
     // ── Stookwijzer ────────────────────────────────────────────────────────
-    const stookBanner = document.getElementById('stookwijzer-banner');
+    const stookBanner    = document.getElementById('stookwijzer-banner');
+    const stookIndicator = document.getElementById('stookwijzer-indicator');
 
-    function updateStookwijzerBanner() {
-        if (!document.getElementById('wood-enabled').checked || !stookwijzerAdvice) {
+    function updateStookwijzerUI() {
+        // Top indicator — always visible when data is available
+        if (!stookwijzerAdvice) {
+            stookIndicator.style.display = 'none';
+            stookIndicator.className = '';
+        } else if (stookwijzerAdvice === 'code_red') {
+            stookIndicator.style.display = '';
+            stookIndicator.className = 'sw-red';
+            stookIndicator.textContent = '🚫 Stookalarm';
+        } else if (stookwijzerAdvice === 'code_orange') {
+            stookIndicator.style.display = '';
+            stookIndicator.className = 'sw-orange';
+            stookIndicator.textContent = '⚠️ Stookwijzer: ongunstig';
+        } else {
+            stookIndicator.style.display = '';
+            stookIndicator.className = 'sw-yellow';
+            stookIndicator.textContent = '✅ Stookwijzer: gunstig';
+        }
+
+        // Houtkachel warning banner — only when wood stove is enabled
+        const woodOn = document.getElementById('wood-enabled').checked;
+        if (!woodOn || !stookwijzerAdvice || stookwijzerAdvice === 'code_yellow') {
             stookBanner.style.display = 'none';
             stookBanner.className = '';
-            return;
-        }
-        if (stookwijzerAdvice === 'code_orange') {
+        } else if (stookwijzerAdvice === 'code_orange') {
             stookBanner.style.display = '';
             stookBanner.className = 'sw-orange';
-            stookBanner.textContent = '⚠️ Stookwijzer: ongunstig — liever niet stoken vandaag';
+            stookBanner.textContent = '⚠️ Ongunstig — liever niet stoken vandaag';
         } else if (stookwijzerAdvice === 'code_red') {
             stookBanner.style.display = '';
             stookBanner.className = 'sw-red';
             stookBanner.textContent = '🚫 Stookalarm! Gebruik de houtkachel niet — slechte luchtkwaliteit';
-        } else {
-            stookBanner.style.display = 'none';
-            stookBanner.className = '';
         }
     }
 
     async function fetchStookwijzer(city) {
-        if (!document.getElementById('wood-enabled').checked) {
-            stookwijzerAdvice = null;
-            updateStookwijzerBanner();
-            return;
-        }
         const coords = CITIES[city];
         if (!coords) return;
         const [lat, lon] = coords;
@@ -861,7 +884,7 @@
         } catch {
             stookwijzerAdvice = null;
         }
-        updateStookwijzerBanner();
+        updateStookwijzerUI();
         // Re-run calculate in case the stookalarm overrides wood recommendation
         const temp = temperatures[city];
         if (temp != null) runCalculate(city, temp);
@@ -1415,7 +1438,7 @@
     document.getElementById('wood-enabled').addEventListener('change', () => {
         document.getElementById('wood-options').classList.toggle('visible',
             document.getElementById('wood-enabled').checked);
-        fetchStookwijzer(selectedCity);
+        updateStookwijzerUI();
         onInputChange();
     });
     document.getElementById('wood-price').addEventListener('input', onInputChange);
