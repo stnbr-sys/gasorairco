@@ -262,6 +262,7 @@
         #recommendation.none  { color: #86efac; background: #052e16; }
         #recommendation.wait  { color: #94a3b8;  background: #1e293b; }
         #recommendation.wood  { color: #d4a574;  background: #2d1b0e; box-shadow: 0 0 0 1px #78350f, 0 4px 12px rgba(120,53,15,0.35); }
+        #recommendation.elec  { color: #c7d2fe;  background: #1e1b4b; box-shadow: 0 0 0 1px #4338ca, 0 4px 12px rgba(67,56,202,0.35); }
 
         #savings { font-size: 12px; color: #94a3b8; text-align: center; }
 
@@ -561,7 +562,7 @@
         @media (max-width: 768px) {
             #mobile-result {
                 position: fixed;
-                bottom: 16px;
+                bottom: 280px;
                 left: 12px;
                 right: 12px;
                 z-index: 1000;
@@ -605,6 +606,7 @@
             #mr-rec.airco { color: #bfdbfe; background: #1e3a5f; }
             #mr-rec.gas   { color: #fed7aa; background: #431407; }
             #mr-rec.wood  { color: #d4a574; background: #2d1b0e; }
+            #mr-rec.elec  { color: #c7d2fe; background: #1e1b4b; }
             #mr-rec.none  { color: #86efac; background: #052e16; }
             #mr-rec.wait  { color: #94a3b8; background: #1e293b; }
         }
@@ -759,9 +761,18 @@
 
     <hr>
 
+    <div class="section-label">Elektrisch verwarmen</div>
+    <div class="dynamic-row">
+        <input type="checkbox" id="elec-heat-enabled">
+        <label for="elec-heat-enabled">Vergelijk met elektrisch verwarmen</label>
+    </div>
+
+    <hr>
+
     <div id="gas-cost" class="cost-line">Gas: —</div>
     <div id="airco-cost" class="cost-line">AC: —</div>
     <div id="wood-cost" class="cost-line" style="display:none">Hout: —</div>
+    <div id="elec-heat-cost" class="cost-line" style="display:none">Elektr.: —</div>
     <div id="recommendation" class="wait">Laden…</div>
     <div id="savings"></div>
 
@@ -956,6 +967,12 @@
         if (temp != null) runCalculate(city, temp);
     }
 
+    function getElecHeatCostKwh() {
+        if (!document.getElementById('elec-heat-enabled').checked) return null;
+        const price = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
+        return isNaN(price) || price <= 0 ? null : price;
+    }
+
     function getWoodCostKwh() {
         if (!document.getElementById('wood-enabled').checked) return null;
         const price = parseFloat(document.getElementById('wood-price').value);
@@ -986,9 +1003,13 @@
         const cop       = lookupCop(temp, AC_SYSTEMS[acSelect.value]);
         if (cop === null) return 'none';
         const aircoCost = elecPrice / cop;
-        const woodCost  = getWoodCostKwh();
-        if (woodCost !== null && woodCost < gasCost && woodCost < aircoCost && stookwijzerAdvice !== 'code_red') return 'wood';
-        return aircoCost < gasCost ? 'airco' : 'gas';
+        const woodCost     = getWoodCostKwh();
+        const elecHeatCost = getElecHeatCostKwh();
+        let winner = aircoCost < gasCost ? 'airco' : 'gas';
+        let winnerCost = Math.min(gasCost, aircoCost);
+        if (woodCost !== null && woodCost < winnerCost && stookwijzerAdvice !== 'code_red') { winner = 'wood'; winnerCost = woodCost; }
+        if (elecHeatCost !== null && elecHeatCost < winnerCost) { winner = 'elec'; }
+        return winner;
     }
 
     // ── DivIcon factory ────────────────────────────────────────────────────
@@ -1008,16 +1029,15 @@
     }
 
     // ── Update all marker icons ────────────────────────────────────────────
-    function updateAllMarkers() {
-        const validTemps = Object.values(temperatures).filter(t => t != null);
-        const tMin = validTemps.length ? Math.min(...validTemps) - 1 : 0;
-        const tMax = validTemps.length ? Math.max(...validTemps) + 1 : 20;
+    const REC_COLORS = { gas: '#7c2d12', airco: '#1e3a5f', wood: '#2d1b0e', elec: '#1e1b4b', none: '#1a2e05' };
+    const REC_EMOJI  = { gas: '🔥', airco: '❄️', wood: '🪵', elec: '⚡', none: '☀️' };
 
+    function updateAllMarkers() {
         Object.keys(CITIES).forEach(city => {
             const temp  = temperatures[city];
-            const color = temp != null ? tempToColor(temp, tMin, tMax) : '#94a3b8';
             const rec   = cityRecommendation(city);
-            const emoji = rec === 'gas' ? '🔥' : rec === 'airco' ? '⚡' : rec === 'none' ? '☀️' : rec === 'wood' ? '🪵' : '';
+            const color = rec ? REC_COLORS[rec] : '#334155';
+            const emoji = rec ? REC_EMOJI[rec]  : '';
             markers[city].setIcon(makeDivIcon(color, emoji, city === selectedCity));
             if (temp != null)
                 markers[city].bindTooltip(`${city}: ${temp.toFixed(1)}°C`, { permanent: false, direction: 'top' });
@@ -1099,13 +1119,22 @@
         document.getElementById('gas-cost').textContent =
             `Gas: €${data.gas_cost_kwh.toFixed(3)}/kWh warmte`;
 
-        const woodCostKwh = getWoodCostKwh();
-        const woodCostEl  = document.getElementById('wood-cost');
+        const woodCostKwh     = getWoodCostKwh();
+        const elecHeatCostKwh = getElecHeatCostKwh();
+
+        const woodCostEl     = document.getElementById('wood-cost');
+        const elecHeatCostEl = document.getElementById('elec-heat-cost');
         if (woodCostKwh !== null) {
             woodCostEl.style.display = '';
             woodCostEl.textContent = `Hout: €${woodCostKwh.toFixed(3)}/kWh warmte`;
         } else {
             woodCostEl.style.display = 'none';
+        }
+        if (elecHeatCostKwh !== null) {
+            elecHeatCostEl.style.display = '';
+            elecHeatCostEl.textContent = `Elektr.: €${elecHeatCostKwh.toFixed(3)}/kWh warmte`;
+        } else {
+            elecHeatCostEl.style.display = 'none';
         }
 
         if (data.recommendation === 'none') {
@@ -1120,34 +1149,28 @@
         document.getElementById('airco-cost').textContent =
             `AC: €${data.airco_cost_kwh.toFixed(3)}/kWh warmte`;
 
-        // Determine cheapest: gas, airco, or wood (blocked during stookalarm)
+        // Determine cheapest across all enabled options
         let winner     = data.recommendation;  // 'gas' or 'airco'
         let winnerCost = winner === 'airco' ? data.airco_cost_kwh : data.gas_cost_kwh;
         if (woodCostKwh !== null && woodCostKwh < winnerCost && stookwijzerAdvice !== 'code_red') {
-            winner     = 'wood';
-            winnerCost = woodCostKwh;
+            winner = 'wood'; winnerCost = woodCostKwh;
+        }
+        if (elecHeatCostKwh !== null && elecHeatCostKwh < winnerCost) {
+            winner = 'elec'; winnerCost = elecHeatCostKwh;
         }
 
         const tempStr = temp != null ? ` · ${temp.toFixed(1)}°C` : '';
-        if (winner === 'wood') {
-            document.getElementById('recommendation').textContent = '🪵 Gebruik HOUTKACHEL';
-            document.getElementById('recommendation').className = 'wood';
-            document.getElementById('savings').textContent =
-                `Besparing t.o.v. gas: €${(data.gas_cost_kwh - woodCostKwh).toFixed(3)}/kWh`;
-            updateMobileResult('wood', `🪵 Houtkachel · €${winnerCost.toFixed(3)}/kWh`, city + tempStr);
-        } else if (winner === 'airco') {
-            document.getElementById('recommendation').textContent = '❄️ Gebruik AC';
-            document.getElementById('recommendation').className = 'airco';
-            document.getElementById('savings').textContent =
-                `Besparing: €${data.savings.toFixed(3)}/kWh`;
-            updateMobileResult('airco', `❄️ Gebruik AC · €${winnerCost.toFixed(3)}/kWh`, city + tempStr);
-        } else {
-            document.getElementById('recommendation').textContent = '🔥 Gebruik GAS';
-            document.getElementById('recommendation').className = 'gas';
-            document.getElementById('savings').textContent =
-                `Besparing: €${data.savings.toFixed(3)}/kWh`;
-            updateMobileResult('gas', `🔥 Gebruik GAS · €${winnerCost.toFixed(3)}/kWh`, city + tempStr);
-        }
+        const labels = {
+            wood:  ['🪵 Gebruik HOUTKACHEL', `Besparing t.o.v. gas: €${(data.gas_cost_kwh - woodCostKwh).toFixed(3)}/kWh`],
+            airco: ['❄️ Gebruik AC',          `Besparing: €${data.savings.toFixed(3)}/kWh`],
+            elec:  ['⚡ Gebruik ELEKTRISCH',  `Besparing t.o.v. gas: €${(data.gas_cost_kwh - elecHeatCostKwh).toFixed(3)}/kWh`],
+            gas:   ['🔥 Gebruik GAS',         `Besparing: €${data.savings.toFixed(3)}/kWh`],
+        };
+        const [recText, savingsText] = labels[winner];
+        document.getElementById('recommendation').textContent = recText;
+        document.getElementById('recommendation').className   = winner;
+        document.getElementById('savings').textContent        = savingsText;
+        updateMobileResult(winner, `${REC_EMOJI[winner]} ${recText.split(' ').slice(1).join(' ')} · €${winnerCost.toFixed(3)}/kWh`, city + tempStr);
     }
 
     // ── Mobile result card ─────────────────────────────────────────────────
@@ -1413,20 +1436,22 @@
         localStorage.setItem(LS + 'gas_price',     document.getElementById('gas-price').value);
         localStorage.setItem(LS + 'elec_price',    document.getElementById('elec-price').value);
         localStorage.setItem(LS + 'price_source',  document.getElementById('price-source').value);
-        localStorage.setItem(LS + 'wood_enabled',  document.getElementById('wood-enabled').checked);
-        localStorage.setItem(LS + 'wood_price',    document.getElementById('wood-price').value);
-        localStorage.setItem(LS + 'wood_type',     woodTypeSelect.value);
+        localStorage.setItem(LS + 'wood_enabled',      document.getElementById('wood-enabled').checked);
+        localStorage.setItem(LS + 'wood_price',        document.getElementById('wood-price').value);
+        localStorage.setItem(LS + 'wood_type',         woodTypeSelect.value);
+        localStorage.setItem(LS + 'elec_heat_enabled', document.getElementById('elec-heat-enabled').checked);
     }
 
     function loadPrefs() {
-        const sys         = localStorage.getItem(LS + 'ac_system');
-        const gas         = localStorage.getItem(LS + 'gas_price');
-        const elec        = localStorage.getItem(LS + 'elec_price');
-        const source      = localStorage.getItem(LS + 'price_source');
-        const city        = localStorage.getItem(LS + 'city');
-        const woodEnabled = localStorage.getItem(LS + 'wood_enabled') === 'true';
-        const woodPrice   = localStorage.getItem(LS + 'wood_price');
-        const woodType    = localStorage.getItem(LS + 'wood_type');
+        const sys             = localStorage.getItem(LS + 'ac_system');
+        const gas             = localStorage.getItem(LS + 'gas_price');
+        const elec            = localStorage.getItem(LS + 'elec_price');
+        const source          = localStorage.getItem(LS + 'price_source');
+        const city            = localStorage.getItem(LS + 'city');
+        const woodEnabled     = localStorage.getItem(LS + 'wood_enabled') === 'true';
+        const woodPrice       = localStorage.getItem(LS + 'wood_price');
+        const woodType        = localStorage.getItem(LS + 'wood_type');
+        const elecHeatEnabled = localStorage.getItem(LS + 'elec_heat_enabled') === 'true';
         if (sys    && AC_SYSTEMS[sys]) acSelect.value = sys;
         if (gas)    document.getElementById('gas-price').value    = gas;
         if (elec)   document.getElementById('elec-price').value   = elec;
@@ -1435,6 +1460,7 @@
         document.getElementById('wood-options').classList.toggle('visible', woodEnabled);
         if (woodPrice) document.getElementById('wood-price').value = woodPrice;
         if (woodType && WOOD_TYPES[woodType]) woodTypeSelect.value = woodType;
+        document.getElementById('elec-heat-enabled').checked = elecHeatEnabled;
         return city && CITIES[city] ? city : null;
     }
 
@@ -1531,6 +1557,7 @@
     });
     document.getElementById('wood-price').addEventListener('input', onInputChange);
     woodTypeSelect.addEventListener('change', onInputChange);
+    document.getElementById('elec-heat-enabled').addEventListener('change', onInputChange);
 
     // ── Dynamic price helper ───────────────────────────────────────────────
     const priceSource = document.getElementById('price-source');
