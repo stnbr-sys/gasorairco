@@ -213,6 +213,8 @@
         }
         .compare-item input[type="checkbox"] { cursor: pointer; flex-shrink: 0; }
         #ac-section { display: flex; flex-direction: column; gap: 6px; }
+        #solar-options { display: none; flex-direction: column; gap: 6px; }
+        #solar-options.visible { display: flex; }
 
         #stookwijzer-indicator {
             display: none;
@@ -729,6 +731,18 @@
         </label>
     </div>
 
+    <div class="dynamic-row" style="margin-top:6px;">
+        <input type="checkbox" id="solar-enabled">
+        <label for="solar-enabled">☀️ Zonnepanelen</label>
+    </div>
+    <div id="solar-options">
+        <div class="price-row">
+            <label>Piek vermogen (kWp):</label>
+            <input type="number" id="solar-kwp" value="5" step="0.5" min="0.1">
+        </div>
+        <div id="solar-info" class="dynamic-info"></div>
+    </div>
+
     <div id="ac-section">
         <hr>
         <div class="section-label">AC Systeem</div>
@@ -980,10 +994,40 @@
     function getCvEnabled()    { return document.getElementById('cv-enabled').checked; }
     function getAcEnabled()    { return document.getElementById('airco-enabled').checked; }
 
+    let currentSolarKw = 0;
+    function getSolarKw() {
+        return document.getElementById('solar-enabled').checked ? currentSolarKw : 0;
+    }
+
+    async function fetchSolarData(lat, lon) {
+        if (!document.getElementById('solar-enabled').checked) return;
+        const peakKwp = parseFloat(document.getElementById('solar-kwp').value);
+        if (isNaN(peakKwp) || peakKwp <= 0) return;
+        const infoEl = document.getElementById('solar-info');
+        infoEl.textContent = 'Berekenen…';
+        try {
+            const resp = await fetch(
+                `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=shortwave_radiation`
+            );
+            const data = await resp.json();
+            const irradiance = data.current?.shortwave_radiation ?? 0;
+            currentSolarKw = (irradiance / 1000) * peakKwp * 0.85;
+            infoEl.textContent = `Opbrengst nu: ${currentSolarKw.toFixed(2)} kW (${Math.round(irradiance)} W/m²)`;
+        } catch {
+            currentSolarKw = 0;
+            infoEl.textContent = 'Opbrengst ophalen mislukt';
+        }
+        const temp = temperatures[selectedCity];
+        if (temp != null) runCalculate(selectedCity, temp);
+        updateAllMarkers();
+    }
+
     function getElecHeatCostKwh() {
         if (!document.getElementById('elec-heat-enabled').checked) return null;
         const price = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
-        return isNaN(price) || price <= 0 ? null : price;
+        if (isNaN(price) || price <= 0) return null;
+        const solarKw = getSolarKw();
+        return Math.max(0, (1 - solarKw) * price);
     }
 
     function getWoodCostKwh() {
@@ -1016,11 +1060,12 @@
         const cop       = lookupCop(temp, AC_SYSTEMS[acSelect.value]);
         if (cop === null) return 'none';
         const aircoCost = elecPrice / cop;
+        const effectiveAircoCost = Math.max(0, aircoCost - getSolarKw() * elecPrice);
         const woodCost     = getWoodCostKwh();
         const elecHeatCost = getElecHeatCostKwh();
         let winner = null; let winnerCost = Infinity;
         if (getCvEnabled())   { winner = 'gas';   winnerCost = gasCost; }
-        if (getAcEnabled() && aircoCost < winnerCost) { winner = 'airco'; winnerCost = aircoCost; }
+        if (getAcEnabled() && effectiveAircoCost < winnerCost) { winner = 'airco'; winnerCost = effectiveAircoCost; }
         if (woodCost !== null && woodCost < winnerCost && stookwijzerAdvice !== 'code_red') { winner = 'wood'; winnerCost = woodCost; }
         if (elecHeatCost !== null && elecHeatCost < winnerCost) { winner = 'elec'; }
         return winner;
@@ -1081,6 +1126,8 @@
         updateCarbonDisplay();
         savePrefs();
         fetchStookwijzer(city);   // async; will re-run calculate when done
+        const coords = CITIES[city];
+        if (coords) fetchSolarData(coords[0], coords[1]);
 
         if (temp != null) {
             runCalculate(city, temp);
@@ -1160,13 +1207,16 @@
             return;
         }
 
+        const solarKw = getSolarKw();
+        const effectiveAircoCostKwh = Math.max(0, data.airco_cost_kwh - solarKw * elecPrice);
+        const solarTag = solarKw > 0 ? ` (☀️ -${(solarKw * elecPrice).toFixed(3)})` : '';
         document.getElementById('airco-cost').textContent =
-            `AC: €${data.airco_cost_kwh.toFixed(3)}/kWh warmte`;
+            `AC: €${effectiveAircoCostKwh.toFixed(3)}/kWh warmte${solarTag}`;
 
         // Determine cheapest across all enabled options
         let winner = null; let winnerCost = Infinity;
         if (getCvEnabled())   { winner = 'gas';   winnerCost = data.gas_cost_kwh; }
-        if (getAcEnabled() && data.airco_cost_kwh < winnerCost) { winner = 'airco'; winnerCost = data.airco_cost_kwh; }
+        if (getAcEnabled() && effectiveAircoCostKwh < winnerCost) { winner = 'airco'; winnerCost = effectiveAircoCostKwh; }
         if (woodCostKwh !== null && woodCostKwh < winnerCost && stookwijzerAdvice !== 'code_red') { winner = 'wood'; winnerCost = woodCostKwh; }
         if (elecHeatCostKwh !== null && elecHeatCostKwh < winnerCost) { winner = 'elec'; winnerCost = elecHeatCostKwh; }
         if (winner === null) {
@@ -1180,7 +1230,7 @@
         const tempStr = temp != null ? ` · ${temp.toFixed(1)}°C` : '';
         const labels = {
             wood:  ['🪵 Gebruik HOUTKACHEL', `Besparing t.o.v. gas: €${(data.gas_cost_kwh - woodCostKwh).toFixed(3)}/kWh`],
-            airco: ['❄️ Gebruik AC',          `Besparing: €${data.savings.toFixed(3)}/kWh`],
+            airco: ['❄️ Gebruik AC',          `Besparing t.o.v. gas: €${(data.gas_cost_kwh - effectiveAircoCostKwh).toFixed(3)}/kWh`],
             elec:  ['⚡ Gebruik ELEKTRISCH',  `Besparing t.o.v. gas: €${(data.gas_cost_kwh - elecHeatCostKwh).toFixed(3)}/kWh`],
             gas:   ['🔥 Gebruik GAS',         `Besparing: €${data.savings.toFixed(3)}/kWh`],
         };
@@ -1460,6 +1510,8 @@
         localStorage.setItem(LS + 'cv_enabled',        document.getElementById('cv-enabled').checked);
         localStorage.setItem(LS + 'airco_enabled',     document.getElementById('airco-enabled').checked);
         localStorage.setItem(LS + 'elec_heat_enabled', document.getElementById('elec-heat-enabled').checked);
+        localStorage.setItem(LS + 'solar_enabled',     document.getElementById('solar-enabled').checked);
+        localStorage.setItem(LS + 'solar_kwp',         document.getElementById('solar-kwp').value);
     }
 
     function loadPrefs() {
@@ -1486,6 +1538,11 @@
         if (cvEnabled    !== null) document.getElementById('cv-enabled').checked    = cvEnabled    === 'true';
         if (aircoEnabled !== null) document.getElementById('airco-enabled').checked = aircoEnabled === 'true';
         document.getElementById('elec-heat-enabled').checked = elecHeatEnabled;
+        const solarEnabled = localStorage.getItem(LS + 'solar_enabled') === 'true';
+        const solarKwp     = localStorage.getItem(LS + 'solar_kwp');
+        document.getElementById('solar-enabled').checked = solarEnabled;
+        document.getElementById('solar-options').classList.toggle('visible', solarEnabled);
+        if (solarKwp) document.getElementById('solar-kwp').value = solarKwp;
         // Reflect AC section visibility
         document.getElementById('ac-section').style.display =
             document.getElementById('airco-enabled').checked ? '' : 'none';
@@ -1592,6 +1649,24 @@
     document.getElementById('wood-price').addEventListener('input', onInputChange);
     woodTypeSelect.addEventListener('change', onInputChange);
     document.getElementById('elec-heat-enabled').addEventListener('change', onInputChange);
+    document.getElementById('solar-enabled').addEventListener('change', () => {
+        document.getElementById('solar-options').classList.toggle('visible',
+            document.getElementById('solar-enabled').checked);
+        if (document.getElementById('solar-enabled').checked) {
+            const coords = CITIES[selectedCity];
+            if (coords) fetchSolarData(coords[0], coords[1]);
+        } else {
+            currentSolarKw = 0;
+            document.getElementById('solar-info').textContent = '';
+            onInputChange();
+        }
+        savePrefs();
+    });
+    document.getElementById('solar-kwp').addEventListener('input', () => {
+        const coords = CITIES[selectedCity];
+        if (coords) fetchSolarData(coords[0], coords[1]);
+        savePrefs();
+    });
 
     // ── Dynamic price helper ───────────────────────────────────────────────
     const priceSource = document.getElementById('price-source');
