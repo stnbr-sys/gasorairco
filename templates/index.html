@@ -204,9 +204,10 @@
             border-radius: 5px;
             font-weight: 600;
         }
-        #stookwijzer-indicator.sw-yellow { background: #1a2e05; color: #a3e635; border: 1px solid #4d7c0f; }
-        #stookwijzer-indicator.sw-orange { background: #431407; color: #fed7aa; border: 1px solid #b45309; }
-        #stookwijzer-indicator.sw-red    { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
+        #stookwijzer-indicator.sw-yellow  { background: #1a2e05; color: #a3e635; border: 1px solid #4d7c0f; }
+        #stookwijzer-indicator.sw-orange  { background: #431407; color: #fed7aa; border: 1px solid #b45309; }
+        #stookwijzer-indicator.sw-red     { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
+        #stookwijzer-indicator.sw-unknown { background: #1e293b; color: #64748b; border: 1px solid #334155; }
 
         #stookwijzer-banner {
             display: none;
@@ -839,12 +840,16 @@
     // ── Stookwijzer ────────────────────────────────────────────────────────
     const stookBanner    = document.getElementById('stookwijzer-banner');
     const stookIndicator = document.getElementById('stookwijzer-indicator');
+    stookIndicator.className = 'sw-unknown';
+    stookIndicator.textContent = '🪵 Stookwijzer…';
+    stookIndicator.style.display = '';
 
     function updateStookwijzerUI() {
-        // Top indicator — always visible when data is available
+        // Top indicator — always visible
         if (!stookwijzerAdvice) {
-            stookIndicator.style.display = 'none';
-            stookIndicator.className = '';
+            stookIndicator.style.display = '';
+            stookIndicator.className = 'sw-unknown';
+            stookIndicator.textContent = '🪵 Stookwijzer…';
         } else if (stookwijzerAdvice === 'code_red') {
             stookIndicator.style.display = '';
             stookIndicator.className = 'sw-red';
