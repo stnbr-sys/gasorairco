@@ -197,6 +197,25 @@
         }
         #wood-options.visible { display: flex; }
 
+        #stookwijzer-banner {
+            display: none;
+            border-radius: 7px;
+            padding: 8px 11px;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+        #stookwijzer-banner.sw-orange {
+            background: #431407;
+            color: #fed7aa;
+            border: 1px solid #b45309;
+        }
+        #stookwijzer-banner.sw-red {
+            background: #450a0a;
+            color: #fca5a5;
+            border: 1px solid #dc2626;
+        }
+
         .sub-label {
             font-size: 9px;
             font-weight: 700;
@@ -659,6 +678,7 @@
         <select id="wood-type"></select>
         <div id="wood-detail" class="dynamic-info"></div>
     </div>
+    <div id="stookwijzer-banner"></div>
 
     <hr>
 
@@ -732,9 +752,10 @@
     const WOOD_STOVE_EFFICIENCY = {{ wood_stove_efficiency }};
 
     // ── State ──────────────────────────────────────────────────────────────
-    let temperatures  = {};
-    let selectedCity  = 'Amsterdam';
-    const markers     = {};
+    let temperatures      = {};
+    let selectedCity      = 'Amsterdam';
+    let stookwijzerAdvice = null;   // null | 'code_yellow' | 'code_orange' | 'code_red'
+    const markers         = {};
 
     // ── Populate AC dropdown ───────────────────────────────────────────────
     const acSelect = document.getElementById('ac-select');
@@ -801,6 +822,51 @@
         return curve[curve.length - 1][1];
     }
 
+    // ── Stookwijzer ────────────────────────────────────────────────────────
+    const stookBanner = document.getElementById('stookwijzer-banner');
+
+    function updateStookwijzerBanner() {
+        if (!document.getElementById('wood-enabled').checked || !stookwijzerAdvice) {
+            stookBanner.style.display = 'none';
+            stookBanner.className = '';
+            return;
+        }
+        if (stookwijzerAdvice === 'code_orange') {
+            stookBanner.style.display = '';
+            stookBanner.className = 'sw-orange';
+            stookBanner.textContent = '⚠️ Stookwijzer: ongunstig — liever niet stoken vandaag';
+        } else if (stookwijzerAdvice === 'code_red') {
+            stookBanner.style.display = '';
+            stookBanner.className = 'sw-red';
+            stookBanner.textContent = '🚫 Stookalarm! Gebruik de houtkachel niet — slechte luchtkwaliteit';
+        } else {
+            stookBanner.style.display = 'none';
+            stookBanner.className = '';
+        }
+    }
+
+    async function fetchStookwijzer(city) {
+        if (!document.getElementById('wood-enabled').checked) {
+            stookwijzerAdvice = null;
+            updateStookwijzerBanner();
+            return;
+        }
+        const coords = CITIES[city];
+        if (!coords) return;
+        const [lat, lon] = coords;
+        try {
+            const resp = await fetch(`/api/stookwijzer?lat=${lat}&lon=${lon}`);
+            const data = await resp.json();
+            stookwijzerAdvice = data.advice || null;
+        } catch {
+            stookwijzerAdvice = null;
+        }
+        updateStookwijzerBanner();
+        // Re-run calculate in case the stookalarm overrides wood recommendation
+        const temp = temperatures[city];
+        if (temp != null) runCalculate(city, temp);
+    }
+
     function getWoodCostKwh() {
         if (!document.getElementById('wood-enabled').checked) return null;
         const price = parseFloat(document.getElementById('wood-price').value);
@@ -832,7 +898,7 @@
         if (cop === null) return 'none';
         const aircoCost = elecPrice / cop;
         const woodCost  = getWoodCostKwh();
-        if (woodCost !== null && woodCost < gasCost && woodCost < aircoCost) return 'wood';
+        if (woodCost !== null && woodCost < gasCost && woodCost < aircoCost && stookwijzerAdvice !== 'code_red') return 'wood';
         return aircoCost < gasCost ? 'airco' : 'gas';
     }
 
@@ -891,6 +957,7 @@
         updateCopChart();
         updateCarbonDisplay();
         savePrefs();
+        fetchStookwijzer(city);   // async; will re-run calculate when done
 
         if (temp != null) {
             runCalculate(city, temp);
@@ -962,10 +1029,10 @@
         document.getElementById('airco-cost').textContent =
             `AC: €${data.airco_cost_kwh.toFixed(3)}/kWh warmte`;
 
-        // Determine cheapest: gas, airco, or wood
+        // Determine cheapest: gas, airco, or wood (blocked during stookalarm)
         let winner     = data.recommendation;  // 'gas' or 'airco'
         let winnerCost = winner === 'airco' ? data.airco_cost_kwh : data.gas_cost_kwh;
-        if (woodCostKwh !== null && woodCostKwh < winnerCost) {
+        if (woodCostKwh !== null && woodCostKwh < winnerCost && stookwijzerAdvice !== 'code_red') {
             winner     = 'wood';
             winnerCost = woodCostKwh;
         }
@@ -1348,6 +1415,7 @@
     document.getElementById('wood-enabled').addEventListener('change', () => {
         document.getElementById('wood-options').classList.toggle('visible',
             document.getElementById('wood-enabled').checked);
+        fetchStookwijzer(selectedCity);
         onInputChange();
     });
     document.getElementById('wood-price').addEventListener('input', onInputChange);

@@ -55,6 +55,47 @@ CITIES: dict[str, tuple[float, float]] = {
     'Vlissingen':       (51.4425, 3.5756),
     'Zaandam':          (52.4389, 4.8136),
     'Zoetermeer':       (52.0574, 4.4938),
+    # Additional cities for broader coverage
+    'Alphen a/d Rijn':  (52.1296, 4.6559),
+    'Assen':            (52.9929, 6.5642),
+    'Bergen op Zoom':   (51.4940, 4.2887),
+    'Capelle a/d IJssel':(51.9278, 4.5669),
+    'Coevorden':        (52.6606, 6.7428),
+    'Delfzijl':         (53.3290, 6.9211),
+    'Doetinchem':       (51.9628, 6.2953),
+    'Drachten':         (53.1111, 6.0964),
+    'Franeker':         (53.1854, 5.5432),
+    'Hardenberg':       (52.5752, 6.6179),
+    'Harderwijk':       (52.3444, 5.6239),
+    'Heerhugowaard':    (52.6702, 4.8437),
+    'Hengelo':          (52.2659, 6.7933),
+    'Hilversum':        (52.2292, 5.1787),
+    'Hoorn':            (52.6440, 5.0604),
+    'Kampen':           (52.5553, 5.9097),
+    'Kerkrade':         (50.8655, 6.0602),
+    'Meppel':           (52.6963, 6.1936),
+    'Nieuwegein':       (52.0309, 5.0978),
+    'Purmerend':        (52.5030, 4.9599),
+    'Ridderkerk':       (51.8680, 4.5980),
+    'Schiedam':         (51.9175, 4.3980),
+    'Sittard':          (50.9983, 5.8696),
+    'Spijkenisse':      (51.8476, 4.3254),
+    'Stadskanaal':      (53.0000, 6.9500),
+    'Tiel':             (51.8874, 5.4305),
+    'Veenendaal':       (52.0265, 5.5568),
+    'Veldhoven':        (51.4163, 5.4065),
+    'Venray':           (51.5240, 5.9738),
+    'Vlaardingen':      (51.9126, 4.3429),
+    'Weert':            (51.2499, 5.7063),
+    'Westland':         (51.9971, 4.2009),
+    'Woerden':          (52.0875, 4.8878),
+    'Zeist':            (52.0878, 5.2352),
+    'Zutphen':          (52.1380, 6.1986),
+    'Barendrecht':      (51.8594, 4.5386),
+    'Wijk bij Duurstede':(51.9743, 5.3379),
+    'Dokkum':           (53.3255, 5.9990),
+    'Winschoten':       (53.1432, 7.0384),
+    'Sluis':            (51.3088, 3.3882),
 }
 
 def _load_cop_data() -> dict:
@@ -129,6 +170,23 @@ def lookup_cop(outdoor_temp_c: float, curve: list[tuple[float, float]]) -> float
             f = (outdoor_temp_c - t0) / (t1 - t0)
             return cop0 + f * (cop1 - cop0)
     return curve[-1][1]
+
+
+def _to_rd(lat: float, lon: float) -> tuple[float, float]:
+    """Transform WGS84 (lat, lon) to Dutch RD New (EPSG:28992) (x, y) in metres."""
+    x0, y0 = 155000.0, 463000.0
+    f0, l0 = 52.15517440, 5.38720621
+    Rp  = [0, 1, 2, 0, 1, 3, 1, 0, 2]
+    Rq  = [1, 1, 1, 3, 0, 1, 3, 2, 3]
+    Rpq = [190094.945, -11832.228, -114.221, -32.391, -0.705, -2.34, -0.608, -0.008, 0.148]
+    Sp  = [1, 0, 2, 1, 3, 0, 2, 1, 0, 1]
+    Sq  = [0, 2, 0, 2, 0, 1, 2, 1, 4, 4]
+    Spq = [309056.544, 3638.893, 73.077, -157.984, 59.788, 0.433, -6.439, -0.032, 0.092, -0.054]
+    df = 0.36 * (lat - f0)
+    dl = 0.36 * (lon - l0)
+    x = x0 + sum(Rpq[i] * (df ** Rp[i]) * (dl ** Rq[i]) for i in range(9))
+    y = y0 + sum(Spq[i] * (df ** Sp[i]) * (dl ** Sq[i]) for i in range(10))
+    return x, y
 
 
 def find_break_even(curve: list[tuple[float, float]], gas_cost_kwh: float, elec_price: float) -> tuple[str, float | None]:
@@ -329,6 +387,61 @@ def gas_price():
     fetcher = _PRICE_FETCHERS.get(source, _energyzero_current_price)
     try:
         return jsonify(fetcher(usage_type=3))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+
+@app.route('/api/stookwijzer')
+def stookwijzer():
+    """Return current Stookwijzer advice for a coordinate (RIVM / Atlas Leefomgeving WMS)."""
+    try:
+        lat = float(request.args['lat'])
+        lon = float(request.args['lon'])
+    except (KeyError, ValueError):
+        return jsonify({'error': 'lat and lon required'}), 400
+
+    x_rd, y_rd = _to_rd(lat, lon)
+    # 5 km bounding box; point placed at pixel (128,128) = centre of 256×256 image
+    buf = 2500
+    bbox = f'{x_rd - buf},{y_rd - buf},{x_rd + buf},{y_rd + buf}'
+    url = (
+        'https://data.rivm.nl/geo/alo/wms'
+        '?service=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo'
+        '&FORMAT=image/png&TRANSPARENT=true'
+        '&QUERY_LAYERS=stookwijzer_v2&LAYERS=stookwijzer_v2'
+        '&servicekey=82b124ad-834d-4c10-8bd0-ee730d5c1cc8'
+        '&STYLES=&BUFFER=1&EXCEPTIONS=INIMAGE'
+        '&info_format=application/json&feature_count=1'
+        '&I=128&J=128&WIDTH=256&HEIGHT=256&CRS=EPSG:28992&BBOX=' + bbox
+    )
+    try:
+        resp = requests.get(url, timeout=8)
+        resp.raise_for_status()
+        data = resp.json()
+        features = data.get('features', [])
+        if not features:
+            return jsonify({'advice': None, 'stookalarm': False})
+
+        props = features[0]['properties']
+        now_hour = datetime.now(timezone.utc).hour
+        if now_hour < 6:
+            raw = props.get('advies_0')
+        elif now_hour < 12:
+            raw = props.get('advies_6')
+        elif now_hour < 18:
+            raw = props.get('advies_12')
+        else:
+            raw = props.get('advies_18')
+
+        # 0 = code_yellow (ok), 1 = code_orange (ongunstig), 2 = code_red (stookalarm)
+        color_map = {'0': 'code_yellow', '1': 'code_orange', '2': 'code_red'}
+        advice = color_map.get(str(raw), 'code_yellow')
+        return jsonify({
+            'advice':    advice,
+            'lki':       props.get('lki'),
+            'wind_bft':  props.get('wind_bft'),
+            'stookalarm': advice == 'code_red',
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 502
 

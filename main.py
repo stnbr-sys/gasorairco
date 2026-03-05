@@ -37,6 +37,27 @@ CITIES: dict[str, tuple[float, float]] = {
     'Leiden':           (52.1601, 4.4970),
     'Dordrecht':        (51.8133, 4.6901),
     'Zwolle':           (52.5168, 6.0830),
+    # Added for broader coverage
+    'Alkmaar':          (52.6324, 4.7534),
+    'Delft':            (52.0116, 4.3571),
+    'Deventer':         (52.2550, 6.1583),
+    'Emmen':            (52.7792, 6.9008),
+    'Gouda':            (52.0167, 4.7000),
+    'Heerlen':          (50.8878, 5.9806),
+    'Helmond':          (51.4818, 5.6575),
+    'Hoogeveen':        (52.7269, 6.4775),
+    'Leeuwarden':       (53.2012, 5.7999),
+    'Lelystad':         (52.5185, 5.4714),
+    'Middelburg':       (51.4988, 3.6136),
+    'Oss':              (51.7654, 5.5188),
+    'Roosendaal':       (51.5308, 4.4636),
+    'Roermond':         (51.1940, 5.9875),
+    'Sneek':            (53.0323, 5.6600),
+    'Terneuzen':        (51.3352, 3.8278),
+    'Venlo':            (51.3704, 6.1724),
+    'Vlissingen':       (51.4425, 3.5756),
+    'Zaandam':          (52.4389, 4.8136),
+    'Zoetermeer':       (52.0574, 4.4938),
 }
 
 def _load_ac_systems() -> dict[str, list[tuple[float, float]]]:
