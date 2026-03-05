@@ -197,6 +197,23 @@
         }
         #wood-options.visible { display: flex; }
 
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px 4px;
+        }
+        .compare-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #94a3b8;
+            user-select: none;
+        }
+        .compare-item input[type="checkbox"] { cursor: pointer; flex-shrink: 0; }
+        #ac-section { display: flex; flex-direction: column; gap: 6px; }
+
         #stookwijzer-indicator {
             display: none;
             font-size: 11px;
@@ -705,9 +722,32 @@
 
     <hr>
 
-    <div class="section-label">AC Systeem</div>
-    <select id="ac-select"></select>
-    <div id="cop-display">COP: —</div>
+    <div class="section-label">Vergelijk met</div>
+    <div class="compare-grid">
+        <label class="compare-item">
+            <input type="checkbox" id="cv-enabled" checked>
+            🔥 CV (gas)
+        </label>
+        <label class="compare-item">
+            <input type="checkbox" id="airco-enabled" checked>
+            ❄️ Airco
+        </label>
+        <label class="compare-item">
+            <input type="checkbox" id="wood-enabled">
+            🪵 Houtkachel <div id="stookwijzer-indicator"></div>
+        </label>
+        <label class="compare-item">
+            <input type="checkbox" id="elec-heat-enabled">
+            ⚡ Elektrisch
+        </label>
+    </div>
+
+    <div id="ac-section">
+        <hr>
+        <div class="section-label">AC Systeem</div>
+        <select id="ac-select"></select>
+        <div id="cop-display">COP: —</div>
+    </div>
 
     <hr>
 
@@ -739,32 +779,16 @@
     </div>
     <div id="dynamic-info" class="dynamic-info"></div>
 
-    <hr>
-
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
-        <div class="section-label">Houtkachel</div>
-        <div id="stookwijzer-indicator"></div>
-    </div>
-    <div class="dynamic-row">
-        <input type="checkbox" id="wood-enabled">
-        <label for="wood-enabled">Vergelijk met houtkachel</label>
-    </div>
     <div id="wood-options">
+        <hr>
+        <div class="section-label">Houtkachel</div>
         <div class="price-row">
             <label>Houtprijs (€/m³):</label>
             <input type="number" id="wood-price" value="80" step="1" min="0">
         </div>
         <select id="wood-type"></select>
         <div id="wood-detail" class="dynamic-info"></div>
-    </div>
-    <div id="stookwijzer-banner"></div>
-
-    <hr>
-
-    <div class="section-label">Elektrisch verwarmen</div>
-    <div class="dynamic-row">
-        <input type="checkbox" id="elec-heat-enabled">
-        <label for="elec-heat-enabled">Vergelijk met elektrisch verwarmen</label>
+        <div id="stookwijzer-banner"></div>
     </div>
 
     <hr>
@@ -967,6 +991,9 @@
         if (temp != null) runCalculate(city, temp);
     }
 
+    function getCvEnabled()    { return document.getElementById('cv-enabled').checked; }
+    function getAcEnabled()    { return document.getElementById('airco-enabled').checked; }
+
     function getElecHeatCostKwh() {
         if (!document.getElementById('elec-heat-enabled').checked) return null;
         const price = parseFloat(document.getElementById('elec-price').value.replace(',', '.'));
@@ -1005,8 +1032,9 @@
         const aircoCost = elecPrice / cop;
         const woodCost     = getWoodCostKwh();
         const elecHeatCost = getElecHeatCostKwh();
-        let winner = aircoCost < gasCost ? 'airco' : 'gas';
-        let winnerCost = Math.min(gasCost, aircoCost);
+        let winner = null; let winnerCost = Infinity;
+        if (getCvEnabled())   { winner = 'gas';   winnerCost = gasCost; }
+        if (getAcEnabled() && aircoCost < winnerCost) { winner = 'airco'; winnerCost = aircoCost; }
         if (woodCost !== null && woodCost < winnerCost && stookwijzerAdvice !== 'code_red') { winner = 'wood'; winnerCost = woodCost; }
         if (elecHeatCost !== null && elecHeatCost < winnerCost) { winner = 'elec'; }
         return winner;
@@ -1150,13 +1178,17 @@
             `AC: €${data.airco_cost_kwh.toFixed(3)}/kWh warmte`;
 
         // Determine cheapest across all enabled options
-        let winner     = data.recommendation;  // 'gas' or 'airco'
-        let winnerCost = winner === 'airco' ? data.airco_cost_kwh : data.gas_cost_kwh;
-        if (woodCostKwh !== null && woodCostKwh < winnerCost && stookwijzerAdvice !== 'code_red') {
-            winner = 'wood'; winnerCost = woodCostKwh;
-        }
-        if (elecHeatCostKwh !== null && elecHeatCostKwh < winnerCost) {
-            winner = 'elec'; winnerCost = elecHeatCostKwh;
+        let winner = null; let winnerCost = Infinity;
+        if (getCvEnabled())   { winner = 'gas';   winnerCost = data.gas_cost_kwh; }
+        if (getAcEnabled() && data.airco_cost_kwh < winnerCost) { winner = 'airco'; winnerCost = data.airco_cost_kwh; }
+        if (woodCostKwh !== null && woodCostKwh < winnerCost && stookwijzerAdvice !== 'code_red') { winner = 'wood'; winnerCost = woodCostKwh; }
+        if (elecHeatCostKwh !== null && elecHeatCostKwh < winnerCost) { winner = 'elec'; winnerCost = elecHeatCostKwh; }
+        if (winner === null) {
+            document.getElementById('recommendation').textContent = 'Kies minimaal één optie';
+            document.getElementById('recommendation').className = 'wait';
+            document.getElementById('savings').textContent = '';
+            updateMobileResult('wait', 'Kies een optie');
+            return;
         }
 
         const tempStr = temp != null ? ` · ${temp.toFixed(1)}°C` : '';
@@ -1439,6 +1471,8 @@
         localStorage.setItem(LS + 'wood_enabled',      document.getElementById('wood-enabled').checked);
         localStorage.setItem(LS + 'wood_price',        document.getElementById('wood-price').value);
         localStorage.setItem(LS + 'wood_type',         woodTypeSelect.value);
+        localStorage.setItem(LS + 'cv_enabled',        document.getElementById('cv-enabled').checked);
+        localStorage.setItem(LS + 'airco_enabled',     document.getElementById('airco-enabled').checked);
         localStorage.setItem(LS + 'elec_heat_enabled', document.getElementById('elec-heat-enabled').checked);
     }
 
@@ -1451,6 +1485,8 @@
         const woodEnabled     = localStorage.getItem(LS + 'wood_enabled') === 'true';
         const woodPrice       = localStorage.getItem(LS + 'wood_price');
         const woodType        = localStorage.getItem(LS + 'wood_type');
+        const cvEnabled       = localStorage.getItem(LS + 'cv_enabled');
+        const aircoEnabled    = localStorage.getItem(LS + 'airco_enabled');
         const elecHeatEnabled = localStorage.getItem(LS + 'elec_heat_enabled') === 'true';
         if (sys    && AC_SYSTEMS[sys]) acSelect.value = sys;
         if (gas)    document.getElementById('gas-price').value    = gas;
@@ -1460,7 +1496,13 @@
         document.getElementById('wood-options').classList.toggle('visible', woodEnabled);
         if (woodPrice) document.getElementById('wood-price').value = woodPrice;
         if (woodType && WOOD_TYPES[woodType]) woodTypeSelect.value = woodType;
+        // cv/airco default to true if never saved
+        if (cvEnabled    !== null) document.getElementById('cv-enabled').checked    = cvEnabled    === 'true';
+        if (aircoEnabled !== null) document.getElementById('airco-enabled').checked = aircoEnabled === 'true';
         document.getElementById('elec-heat-enabled').checked = elecHeatEnabled;
+        // Reflect AC section visibility
+        document.getElementById('ac-section').style.display =
+            document.getElementById('airco-enabled').checked ? '' : 'none';
         return city && CITIES[city] ? city : null;
     }
 
@@ -1549,6 +1591,12 @@
     acSelect.addEventListener('change', onInputChange);
     document.getElementById('gas-price').addEventListener('input', onInputChange);
     document.getElementById('elec-price').addEventListener('input', onInputChange);
+    document.getElementById('cv-enabled').addEventListener('change', onInputChange);
+    document.getElementById('airco-enabled').addEventListener('change', () => {
+        document.getElementById('ac-section').style.display =
+            document.getElementById('airco-enabled').checked ? '' : 'none';
+        onInputChange();
+    });
     document.getElementById('wood-enabled').addEventListener('change', () => {
         document.getElementById('wood-options').classList.toggle('visible',
             document.getElementById('wood-enabled').checked);
