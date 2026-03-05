@@ -226,24 +226,6 @@
         #stookwijzer-indicator.sw-red     { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
         #stookwijzer-indicator.sw-unknown { background: #1e293b; color: #64748b; border: 1px solid #334155; }
 
-        #stookwijzer-banner {
-            display: none;
-            border-radius: 7px;
-            padding: 8px 11px;
-            font-size: 11px;
-            font-weight: 600;
-            line-height: 1.4;
-        }
-        #stookwijzer-banner.sw-orange {
-            background: #431407;
-            color: #fed7aa;
-            border: 1px solid #b45309;
-        }
-        #stookwijzer-banner.sw-red {
-            background: #450a0a;
-            color: #fca5a5;
-            border: 1px solid #dc2626;
-        }
 
         .sub-label {
             font-size: 9px;
@@ -607,6 +589,14 @@
             padding: 10px 12px;
             text-align: center;
         }
+        #mr-stook {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 6px;
+        }
+        #mr-stook.sw-orange { background: #431407; color: #fed7aa; border: 1px solid #b45309; }
+        #mr-stook.sw-red    { background: #450a0a; color: #fca5a5; border: 1px solid #dc2626; }
         #mr-rec.airco { color: #bfdbfe; background: #1e3a5f; }
         #mr-rec.gas   { color: #fed7aa; background: #431407; }
         #mr-rec.wood  { color: #d4a574; background: #2d1b0e; }
@@ -669,6 +659,7 @@
         <button id="mr-open-btn">☰ Instellingen</button>
     </div>
     <div id="mr-rec" class="wait">Laden…</div>
+    <div id="mr-stook" style="display:none"></div>
 </div>
 
 <div id="sidebar">
@@ -784,7 +775,6 @@
         </div>
         <select id="wood-type"></select>
         <div id="wood-detail" class="dynamic-info"></div>
-        <div id="stookwijzer-banner"></div>
     </div>
 
     <hr>
@@ -931,8 +921,8 @@
     }
 
     // ── Stookwijzer ────────────────────────────────────────────────────────
-    const stookBanner    = document.getElementById('stookwijzer-banner');
     const stookIndicator = document.getElementById('stookwijzer-indicator');
+    const mrStook        = document.getElementById('mr-stook');
     stookIndicator.className = 'sw-unknown';
     stookIndicator.textContent = '🪵 Stookwijzer…';
     stookIndicator.style.display = 'block';
@@ -954,19 +944,19 @@
             stookIndicator.textContent = '✅ Stookwijzer: gunstig';
         }
 
-        // Houtkachel warning banner — only when wood stove is enabled
+        // Stookalarm in result card — only when wood stove is enabled
         const woodOn = document.getElementById('wood-enabled').checked;
         if (!woodOn || !stookwijzerAdvice || stookwijzerAdvice === 'code_yellow') {
-            stookBanner.style.display = 'none';
-            stookBanner.className = '';
+            mrStook.style.display = 'none';
+            mrStook.className = '';
         } else if (stookwijzerAdvice === 'code_orange') {
-            stookBanner.style.display = 'block';
-            stookBanner.className = 'sw-orange';
-            stookBanner.textContent = '⚠️ Ongunstig — liever niet stoken vandaag';
+            mrStook.style.display = 'block';
+            mrStook.className = 'sw-orange';
+            mrStook.textContent = '⚠️ Ongunstig — liever niet stoken vandaag';
         } else if (stookwijzerAdvice === 'code_red') {
-            stookBanner.style.display = 'block';
-            stookBanner.className = 'sw-red';
-            stookBanner.textContent = '🚫 Stookalarm! Gebruik de houtkachel niet — slechte luchtkwaliteit';
+            mrStook.style.display = 'block';
+            mrStook.className = 'sw-red';
+            mrStook.textContent = '🚫 Stookalarm! Gebruik de houtkachel niet';
         }
     }
 
