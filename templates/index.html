@@ -637,7 +637,6 @@
     </div>
     <div class="hint">Klik op een stad op de kaart</div>
     <div id="temp-display">Outdoor temp: loading…</div>
-    <div id="stookwijzer-indicator"></div>
 
     <hr>
 
@@ -677,7 +676,10 @@
 
     <hr>
 
-    <div class="section-label">Houtkachel</div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+        <div class="section-label">Houtkachel</div>
+        <div id="stookwijzer-indicator"></div>
+    </div>
     <div class="dynamic-row">
         <input type="checkbox" id="wood-enabled">
         <label for="wood-enabled">Vergelijk met houtkachel</label>
